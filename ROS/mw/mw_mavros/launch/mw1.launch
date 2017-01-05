@@ -1,0 +1,17 @@
+<launch>
+    <include file="$(find mavros)/launch/px4.launch">
+    </include>
+
+    <include file="$(find rbx1_vision)/launch/usb_cam.launch">
+    </include>
+
+    <node pkg="mw_mavros" name="mwMavrosReceiver" type="receiver.py" output="screen">
+    </node>
+
+    <node pkg="mw_arduino" name="mwArduinoReceiver" type="receiver.py" output="screen">
+    </node>
+  
+    <node pkg="mw_arduino" name="mwArduinoShutdown" type="shutdown.py" output="screen">
+    </node>
+  
+</launch>

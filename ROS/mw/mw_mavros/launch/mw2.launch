@@ -1,0 +1,14 @@
+<launch>
+    <node pkg="mw_mavros" name="mwMavrosTouchHandler" type="touch_handler.py" output="screen">
+    </node>
+
+    <node pkg="mw_video" name="mwIimageConverter" type="image_converter.py" output="screen">
+    </node>
+  
+    <node pkg="mw_mavros" name="mwMavrosConeHandler" type="cone_handler.py" output="screen">
+    </node>
+
+    <node pkg="mw_mavros" name="mwSoundHandler" type="sound_handler.py" output="screen">
+    </node>
+
+</launch>

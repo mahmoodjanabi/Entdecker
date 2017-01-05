@@ -1,0 +1,18 @@
+<package>
+  <name>mw</name>
+  <version>0.0.1</version>
+  <description>Entdecker Packages</description>
+  <maintainer email="marco@sonic.net">Marco Walther</maintainer>
+
+  <license>MIT</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <run_depend>mw_arduino</run_depend>
+  <run_depend>mw_mavros</run_depend>
+  <run_depend>mw_video</run_depend>
+
+  <export>
+    <metapackage/>
+  </export>
+</package>
