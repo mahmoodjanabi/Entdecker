@@ -56,13 +56,7 @@ class GpsReader(threading.Thread):
             raise RunTimeError
 
         self.start_called = True
-        self.ser = serial.Serial('/dev/ttyUSB0', 9600, timeout = 1)
-
-        self.ser.write('$PMTK251,57600*2C\r\n') # 57600 baud
-        self.ser.close()
-
-        self.ser.baudrate = 57600
-        self.ser.open()
+        self.ser = serial.Serial('/dev/ttyUSB0', 57600, timeout = 1)
 
         i = 0                              # Just read some lines
         line = self.ser.readline()
@@ -70,17 +64,16 @@ class GpsReader(threading.Thread):
             line = self.ser.readline()
             i += 1
 
-        self.ser.write('$PMTK220,200*2C\r\n')   # send rate 5Hz
-        self.ser.write('$PMTK300,200,0,0,0,0*2F\r\n')  # fix update rate 5Hz
-        self.ser.write('$PMTK314,1,1,1,1,1,1,0,0,0,0,0,0,0,0,0,0,0,0,0*28\r\n') # Send all data
-
         super(GpsReader, self).start()
 
     def run(self):
         line = self.ser.readline()
         while line != None:
+            # $GNGGA,170515.00,3742.43741,N,12125.36876,W,1,08,0.96,32.2,M,-28.8,M,,*42
+            #        hhmmss.ss,llll.lllll,N,yyyyy.yyyyy,W,1|2- valid,#sats,HDOP,Alt,M,...
+
             a = line.strip().split(',')
-            if a[0] == '$GPGGA':
+            if a[0] == '$GNGGA' or a[0] == '$GPGGA':
                 lat_read = 0.0
                 long_read = 0.0
                 alt_read = 0.0
@@ -169,7 +162,10 @@ for h in ROVER_HOST_LIST:
        rover_host = h
        break
 
-print "c[lrs] - search & avoid Left/Right/Stop, l - land, r\d\d - relay x -> y, s\d\d - speed x.y m/s, w - waypoint, q - quit"
+if ping_ret == 0:
+    print "Found rover @ %s" % rover_host
+
+print "c[lrs] - search & avoid Left/Right/Stop, l - land, r\d\d - relay x -> y, s\d\d - speed x.y m/s, w - waypoint, b - basepoint, q - quit"
 
 getch = Getch()
 c = getch().lower()
