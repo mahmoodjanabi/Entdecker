@@ -56,62 +56,70 @@ class GpsReader(threading.Thread):
             raise RunTimeError
 
         self.start_called = True
-        self.ser = serial.Serial('/dev/ttyUSB0', 57600, timeout = 1)
+        # fn = subprocess.check_output(["/export/home/marcow/bin/find_last", "sol2_*.pos"]).rstrip()
+
+        # self.fin = open(fn, 'r')
+        self.fin = serial.Serial('/dev/ttyUSB0', 115200, timeout = 1)
+
 
         i = 0                              # Just read some lines
-        line = self.ser.readline()
-        while line != None and i < 10:
-            line = self.ser.readline()
+        line = self.fin.readline()
+        while line and i < 10:
+            line = self.fin.readline()
             i += 1
 
         super(GpsReader, self).start()
 
     def run(self):
-        line = self.ser.readline()
-        while line != None:
-            # $GNGGA,170515.00,3742.43741,N,12125.36876,W,1,08,0.96,32.2,M,-28.8,M,,*42
-            #        hhmmss.ss,llll.lllll,N,yyyyy.yyyyy,W,1|2- valid,#sats,HDOP,Alt,M,...
+        while True:
+            line = self.fin.readline()
 
-            a = line.strip().split(',')
-            if a[0] == '$GNGGA' or a[0] == '$GPGGA':
-                lat_read = 0.0
-                long_read = 0.0
-                alt_read = 0.0
+            if not line:
+                where = self.fin.tell()
+                time.sleep(0.2)
+                self.fin.seek(where)
+            else:
+                # $GNGGA,170515.00,3742.43741,N,12125.36876,W,1,08,0.96,32.2,M,-28.8,M,,*42
+                #        hhmmss.ss,llll.lllll,N,yyyyy.yyyyy,W,1|2- valid,#sats,HDOP,Alt,M,...
 
-                if int(a[6]) == 0:                   # invalid
-                    valid = int(a[6])
-                    # print "invalid? %s\r" % valid
-                elif float(a[8]) > 3:                # large hdop:-(
-                    hdop_read = float(a[8])
-                    # print "hdop: %f\r" % hdop_read
-                else:
-                    lat_read = float(a[2])           # assume N
-                    long_read = float(a[4])          # assume W
-                    alt_read = float(a[9])           # ??
+                a = line.strip().split(',')
+                if a[0] == '$GNGGA' or a[0] == '$GPGGA':
+                    lat_read = 0.0
+                    long_read = 0.0
+                    alt_read = 0.0
 
-                if lat_read != 0.0:
-                    lat_real = int(lat_read / 100) + ((5 * ((lat_read * 10000) % 1000000) / 3) / 1000000)
-                    long_real = 0 - (int(long_read / 100) + ((5 * ((long_read * 10000) % 1000000) / 3) / 1000000))
-                    alt_real = alt_read
-                    # print "lat= %f, long= %f\r" % (lat_real, long_real)
-                else:
-                    lat_real = 0.0
-                    long_real = 0.0
-                    alt_real = 0.0
-                    # print "no fix\r"
+                    if int(a[6]) == 0:                   # invalid
+                        valid = int(a[6])
+                        # print "invalid? %s\r" % valid
+                    elif float(a[8]) > 3:                # large hdop:-(
+                        hdop_read = float(a[8])
+                        # print "hdop: %f\r" % hdop_read
+                    else:
+                        lat_read = float(a[2])           # assume N
+                        long_read = float(a[4])          # assume W
+                        alt_read = float(a[9])           # ??
 
-                if self.gps_value != None:
-                    self.gps_value.lock.acquire()
-                    try:
-                        self.gps_value.lat = lat_real
-                        self.gps_value.lng = long_real
-                        self.gps_value.alt = alt_real
-                        # print "gps %f %f %f\r" % (self.gps_value.lat, self.gps_value.lng, self.gps_value.alt)
-                    finally:
-                        self.gps_value.lock.release()
+                    if lat_read != 0.0:
+                        lat_real = int(lat_read / 100) + ((5 * ((lat_read * 10000) % 1000000) / 3) / 1000000)
+                        long_real = 0 - (int(long_read / 100) + ((5 * ((long_read * 10000) % 1000000) / 3) / 1000000))
+                        alt_real = alt_read
+                        # print "lat= %f, long= %f\r" % (lat_real, long_real)
+                    else:
+                        lat_real = 0.0
+                        long_real = 0.0
+                        alt_real = 0.0
+                        # print "no fix\r"
 
-            line = self.ser.readline()
-            time.sleep(0)
+                    if self.gps_value != None and lat_read != 0.0:
+                        self.gps_value.lock.acquire()
+                        try:
+                            self.gps_value.lat = lat_real
+                            self.gps_value.lng = long_real
+                            self.gps_value.alt = alt_real
+                            # print "gps %f %f %f\r" % (self.gps_value.lat, self.gps_value.lng, self.gps_value.alt)
+                        finally:
+                            self.gps_value.lock.release()
+
 
 def calc_diff(lat1, lng1, lat2, lng2):
     lat1_rad = math.radians(lat1)
@@ -185,12 +193,12 @@ while c != 'q' and ord(c) != 3:
         writer.writerow(("#", "BasePoint", my_lat, my_long, my_alt))
         print "b - %f %f %f" % (my_lat, my_long, my_alt)
         if ping_ret == 0:
-            r = subprocess.check_output([ "ssh", "-i", "/export/home/marcow/.ssh/id_daheim", "odroid@%s" % rover_host, 'source /opt/ros/indigo/setup.bash && source $HOME/catkin_ws/install/setup.bash && source $HOME/catkin_ws/devel/setup.bash && /home/odroid/catkin_ws/src/mw/mw_mavros/src/mw_mavros/get_gps.py' ])
+            r = subprocess.check_output([ "ssh", "-i", "/export/home/marcow/.ssh/id_daheim", "odroid@%s" % rover_host, 'source /opt/ros/indigo/setup.bash && source $HOME/catkin_ws/devel/setup.bash && /home/odroid/catkin_ws/src/mw/mw_mavros/src/mw_mavros/get_gps.py' ])
             ra = r.strip().split('\t')
             writer.writerow(ra)
             l = calc_diff(my_lat, my_long, float(ra[2]), float(ra[3]))
             writer.writerow(("#", "Diff", l[0], l[1]))
-            print "  diff %f  %f" % (l[0], l[1])
+            print "  diff %f m %f deg" % (l[0], l[1])
     elif c == 'w':                             # waypoint
         writer.writerow((sequence, 0, 0, 16, 0.0, WAYPOINT_RADIUS, 0.0, 0.0, my_lat, my_long, my_alt, 1))
         sequence += 1
