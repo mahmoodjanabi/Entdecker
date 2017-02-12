@@ -4,7 +4,7 @@ import rospy
 import serial
 import sys
 from std_msgs.msg import Int8
-from mavros.srv import CommandLong
+from mavros_msgs.srv import CommandLong
 
 class SoundHandler():
     def __init__(self):

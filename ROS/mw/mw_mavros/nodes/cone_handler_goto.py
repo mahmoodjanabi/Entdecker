@@ -11,8 +11,8 @@ import rospy
 from std_msgs.msg import Bool, Float64
 from sensor_msgs.msg import NavSatFix
 from cv_bridge import CvBridge, CvBridgeError
-from mavros.msg import Waypoint
-from mavros.srv import CommandLong, SetMode, WaypointGOTO
+from mavros_msgs.msg import Waypoint
+from mavros_msgs.srv import CommandLong, SetMode, WaypointGOTO
 from mw_video.msg import ConeLocation
 
 class ConeHandler():

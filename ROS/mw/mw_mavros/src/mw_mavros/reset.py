@@ -117,7 +117,7 @@ subprocess.call([ "rosrun", "mavros", "mavcmd", "-v", "long", "--", "178", "1", 
 subprocess.call([ "rosrun", "mavros", "mavparam", "-v", "set", "CRUISE_SPEED", "2.0" ], stderr = subprocess.STDOUT)
 # subprocess.call([ "rosrun", "mavros", "mavparam", "-v", "set", "AUTO_KICKSTART", "2.0" ], stderr = subprocess.STDOUT)
 subprocess.call([ "rosrun", "mavros", "mavparam", "-v", "set", "AUTO_KICKSTART", "3.0" ], stderr = subprocess.STDOUT)
-subprocess.call([ "rostopic", "pub", "-1", "/mavros/rc/override", "mavros/OverrideRCIn", "--", "[ 0, 0, 0, 0, 0, 0, 0, 0 ]" ], stderr = subprocess.STDOUT)
+subprocess.call([ "rostopic", "pub", "-1", "/mavros/rc/override", "mavros_msgs/OverrideRCIn", "--", "[ 0, 0, 0, 0, 0, 0, 0, 0 ]" ], stderr = subprocess.STDOUT)
 # subprocess.call([ "rosrun", "mavros", "mavwp", "-v", "load", oname ], stderr = subprocess.STDOUT)
 time.sleep(10)
 subprocess.call([ "rosrun", "mavros", "mavwp", "-v", "setcur", "0" ], stderr = subprocess.STDOUT)

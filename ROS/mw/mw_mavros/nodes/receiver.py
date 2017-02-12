@@ -6,7 +6,7 @@ import threading
 
 from std_msgs.msg import Bool, Int16, Int8
 from sensor_msgs.msg import NavSatFix
-from mavros.msg import Waypoint, WaypointList
+from mavros_msgs.msg import Waypoint, WaypointList
 
 class Receiver():
     def __init__(self):
@@ -40,6 +40,8 @@ class Receiver():
         self.lock.acquire()
         try:
             waypoint_list = list(self.waypoint_list)
+        except TypeError:
+            waypoint_list = []
         finally:
             self.lock.release()
 

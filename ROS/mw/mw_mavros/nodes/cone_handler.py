@@ -9,11 +9,12 @@ import threading
 import time
 
 import rospy
-from std_msgs.msg import Bool, Float64, Int8
+from std_msgs.msg import Bool, Float32, Float64, Int8
 from sensor_msgs.msg import Imu, NavSatFix
-from mavros.msg import OverrideRCIn, Waypoint
-from mavros.srv import ParamGet, ParamSet, SetMode
+from mavros_msgs.msg import OverrideRCIn, ParamValue, Waypoint
+from mavros_msgs.srv import ParamGet, ParamSet, SetMode
 from mw_video.msg import ConeLocation
+from geometry_msgs.msg import TwistStamped
 
 nodeLock = threading.Lock()
 
@@ -22,9 +23,12 @@ class ConeHandler():
         self.node_name = "mwConeHandler"
         self.is_manual = False
         self.touch_value = 0
+        self.arduino_speed_value = 0.0
         self.manual_start_time = None
         self.avoid_direction = 0                    # 1 - Left, 2 - Right
         self.z_angular_velocity = 0.0
+        self.x_linear_velocity = 0.0
+        self.last_throttle = 50
         self.cone_seen_time = datetime(1990, 1, 1)
         self.last_cone_seen_time = datetime(1990, 1, 1)
         self.last_time = datetime.now()
@@ -66,7 +70,9 @@ class ConeHandler():
         self.avoid_sub = rospy.Subscriber("/mw/avoid_direction", Int8, self.avoid_callback, queue_size = 1)
         self.cone_sub = rospy.Subscriber("/mw/cone_location", ConeLocation, self.cone_callback, queue_size = 1)
         self.touch_sub = rospy.Subscriber("/mw/touch", Int8, self.touch_callback, queue_size = 1)
+        self.arduino_speed_sub = rospy.Subscriber("/mw/speed", Float32, self.arduino_speed_callback, queue_size = 1)
         self.imu_sub = rospy.Subscriber("/mavros/imu/data", Imu, self.imu_callback, queue_size = 1)
+        self.gp_vel_sub = rospy.Subscriber("/mavros/global_position/raw/gps_vel", TwistStamped, self.gp_vel_callback, queue_size = 1)
 
         ret = None
         try:
@@ -75,7 +81,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_steer2srv_tconst = ret.real
+            self.apm_steer2srv_tconst = ret.value.real
         else:
             rospy.logerr("get_param(STEER2SRV_TCONST) request failed. Check mavros logs")
 
@@ -86,7 +92,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_steer2srv_p = ret.real
+            self.apm_steer2srv_p = ret.value.real
         else:
             rospy.logerr("get_param(STEER2SRV_P) request failed. Check mavros logs")
 
@@ -97,7 +103,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_steer2srv_i = ret.real
+            self.apm_steer2srv_i = ret.value.real
         else:
             rospy.logerr("get_param(STEER2SRV_I) request failed. Check mavros logs")
 
@@ -108,7 +114,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_steer2srv_d = ret.real
+            self.apm_steer2srv_d = ret.value.real
         else:
             rospy.logerr("get_param(STEER2SRV_D) request failed. Check mavros logs")
 
@@ -119,7 +125,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_steer2srv_imax = ret.integer
+            self.apm_steer2srv_imax = ret.value.integer
         else:
             rospy.logerr("get_param(STEER2SRV_IMAX) request failed. Check mavros logs")
 
@@ -130,7 +136,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_steer2srv_minspd = ret.real
+            self.apm_steer2srv_minspd = ret.value.real
         else:
             rospy.logerr("get_param(STEER2SRV_MINSPD) request failed. Check mavros logs")
 
@@ -141,7 +147,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_rc1_max = ret.integer
+            self.apm_rc1_max = ret.value.integer
         else:
             rospy.logerr("get_param(RC1_MAX) request failed. Check mavros logs")
 
@@ -152,7 +158,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_rc1_min = ret.integer
+            self.apm_rc1_min = ret.value.integer
         else:
             rospy.logerr("get_param(RC1_MIN) request failed. Check mavros logs")
 
@@ -163,7 +169,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_rc1_rev = ret.integer
+            self.apm_rc1_rev = ret.value.integer
         else:
             rospy.logerr("get_param(RC1_REV) request failed. Check mavros logs")
 
@@ -174,7 +180,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_rc1_trim = ret.integer
+            self.apm_rc1_trim = ret.value.integer
         else:
             rospy.logerr("get_param(RC1_TRIM) request failed. Check mavros logs")
 
@@ -185,7 +191,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_rc3_trim = ret.integer
+            self.apm_rc3_trim = ret.value.integer
         else:
             rospy.logerr("get_param(RC3_TRIM) request failed. Check mavros logs")
 
@@ -196,7 +202,7 @@ class ConeHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.auto_kickstart = ret.real
+            self.auto_kickstart = ret.value.real
         else:
             rospy.logerr("get_param(AUTO_KICKSTART) request failed. Check mavros logs")
 
@@ -230,11 +236,21 @@ class ConeHandler():
         finally:
             nodeLock.release()
 
+    def gp_vel_callback(self, ts):
+        nodeLock.acquire()
+        try:
+            self.x_linear_velocity = ts.twist.linear.x
+        finally:
+            nodeLock.release()
+
     def touch_callback(self, tp):
         self.touch_value = tp.data
         if self.touch_value > 0:
             self.is_manual = False
         # rospy.loginfo("touch_callback value= %d is_manual= %d" % (self.touch_value, self.is_manual))
+
+    def arduino_speed_callback(self, tp):
+        self.arduino_speed_value = tp.data
 
     def cone_callback(self, cp):
         nodeLock.acquire()
@@ -306,7 +322,7 @@ class ConeHandler():
         ret = None
         try:
             ret = self.set_param(param_id = 'AUTO_KICKSTART',
-                integer = 0, real = 0.0)
+                value = ParamValue(integer = 0, real = 0.0))
         except rospy.ServiceException as ex:
             rospy.logerr(ex)
 
@@ -327,7 +343,7 @@ class ConeHandler():
         ret = None
         try:
             ret = self.set_param(param_id = 'AUTO_KICKSTART',
-                integer = 0, real = self.auto_kickstart)
+                value = ParamValue(integer = 0, real = self.auto_kickstart))
         except rospy.ServiceException as ex:
             rospy.logerr(ex)
 
@@ -469,12 +485,41 @@ class ConeHandler():
         return self.rc1_angle_to_pwm(ret)
 
     def calc_throttle(self, distance):
+        last_t = self.last_throttle
+        target_vel = 0.5
+        curr_vel = self.arduino_speed_value
+
         if distance < 3:
-            return 75 # 20150403 84 # 77
+            # return 50 # 75 # 20150403 84 # 77
+            # return 65 # 78 # 20150403 86 # 83
+            # return 75 # 85 # 20150403 95
+            target_vel = 0.5
+            if curr_vel < target_vel * 0.95:
+                if self.last_throttle < 110:
+                    self.last_throttle = self.last_throttle + 2
+            elif curr_vel > target_vel * 1.05:
+                if self.last_throttle > 50:
+                    self.last_throttle = self.last_throttle - 2
         elif distance < 5:
-            return 78 # 20150403 86 # 83
+            target_vel = 0.75
+            if curr_vel < target_vel * 0.95:
+                if self.last_throttle < 110:
+                    self.last_throttle = self.last_throttle + 5
+            elif curr_vel > target_vel * 1.05:
+                if self.last_throttle > 50:
+                    self.last_throttle = self.last_throttle -5
         else:
-            return 85 # 20150403 95
+            target_vel = 0.75
+            if curr_vel < target_vel * 0.95:
+                if self.last_throttle < 120:
+                    self.last_throttle = self.last_throttle + 8
+            elif curr_vel > target_vel * 1.05:
+                if self.last_throttle > 50:
+                    self.last_throttle = self.last_throttle -5
+
+        rospy.loginfo("mw target_vel=%f curr_vel= %f  last_t= %d curr_t= %d" % (target_vel, curr_vel, last_t, self.last_throttle))
+
+        return self.last_throttle
 
 def main(args):       
     try:

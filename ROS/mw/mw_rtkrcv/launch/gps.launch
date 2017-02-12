@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="mw_rtkrcv" type="rtkrcv"  name="rtkrcv" args="-s -p 11234 -o $(find mw_rtkrcv)/config/rtkrcv.conf" output="screen">
+    </node>
+</launch>

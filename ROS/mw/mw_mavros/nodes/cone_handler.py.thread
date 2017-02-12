@@ -11,8 +11,8 @@ import time
 import rospy
 from std_msgs.msg import Bool, Float64, Int8
 from sensor_msgs.msg import Imu, NavSatFix
-from mavros.msg import OverrideRCIn, Waypoint
-from mavros.srv import CommandLong, ParamGet, SetMode
+from mavros_msgs.msg import OverrideRCIn, Waypoint
+from mavros_msgs.srv import CommandLong, ParamGet, SetMode
 from mw_video.msg import ConeLocation
 
 nodeLock = threading.Lock()

@@ -4,8 +4,8 @@ import sys
 import time
 import rospy
 from std_msgs.msg import Bool, Int8, Int16
-from mavros.msg import OverrideRCIn
-from mavros.srv import CommandBool, ParamGet, ParamSet, SetMode, WaypointSetCurrent
+from mavros_msgs.msg import OverrideRCIn, ParamValue
+from mavros_msgs.srv import CommandBool, ParamGet, ParamSet, SetMode, WaypointSetCurrent
 
 class TouchHandler():
     def __init__(self):
@@ -44,7 +44,7 @@ class TouchHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_rc1_trim = ret.integer
+            self.apm_rc1_trim = ret.value.integer
         else:
             rospy.logerr("get_param(RC1_TRIM) request failed. Check mavros logs")
 
@@ -55,7 +55,7 @@ class TouchHandler():
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_rc3_trim = ret.integer
+            self.apm_rc3_trim = ret.value.integer
         else:
             rospy.logerr("get_param(RC3_TRIM) request failed. Check mavros logs")
 
@@ -66,7 +66,7 @@ class TouchHandler():
             rospy.logerr(ex)
         
         if ret != None and ret.success:
-            self.auto_kickstart = ret.real 
+            self.auto_kickstart = ret.value.real 
         else:
             rospy.logerr("get_param(AUTO_KICKSTART) request failed. Check mavros logs")
 
@@ -141,7 +141,7 @@ class TouchHandler():
             return                                             # XXX: For now!
  
         rospy.loginfo("%s: Back off" % self.node_name)
-        orc.channels[2] = self.apm_rc3_trim - 110 # 20150403 125              # Really back off
+        orc.channels[2] = self.apm_rc3_trim - 100 # 20150403 125              # Really back off
         self.rc_override_pub.publish(orc);
         time.sleep(2.5)
 
@@ -185,7 +185,7 @@ class TouchHandler():
             ret = None
             try:
                 ret = self.set_param(param_id = 'AUTO_KICKSTART',
-                    integer = 0, real = 0.0)
+                    value = ParamValue(integer = 0, real = 0.0))
             except rospy.ServiceException as ex:
                 rospy.logerr(ex)
         
@@ -207,7 +207,7 @@ class TouchHandler():
             ret = None
             try:
                 ret = self.set_param(param_id = 'AUTO_KICKSTART',
-                    integer = 0, real = self.auto_kickstart)
+                    value = ParamValue(integer = 0, real = self.auto_kickstart))
             except rospy.ServiceException as ex:
                 rospy.logerr(ex)
         
