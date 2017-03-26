@@ -107,24 +107,37 @@ class Receiver():
             try:
                 l = self.serial_port.readline()
                 if l:
-                    m = re.match('((.) )?([-0-9]+)', l)
+                    l = l.rstrip()
+                    # rospy.loginfo("%s: line=%s" % (self.node_name, l))
+                    m = re.match('^([-0-9]+)$', l)
                 
                     if m:
-                        value = int(m.group(3))
+                        value = int(m.group(1))
 
-                        if m.group(2) == None:
-                            rospy.loginfo("%s: Receiver got %d" % (self.node_name, value))
-                            self.touch_pub.publish(value)
+                        # rospy.loginfo("%s: Receiver got %d" % (self.node_name, value))
+                        self.touch_pub.publish(value)
 
-                            if value > 0:
-                                self.search_pub.publish(False)
-                        elif m.group(2) == 'E':
-                            # Spped
-                            # 40 ticks/wheel rotation,
-                            # circumfence 0.40527m
-                            # every 0.2 seconds
-                            s = value * 0.050658       # now in m/s
-                            self.speed_pub.publish(s)
+                        if value > 0:
+                            self.search_pub.publish(False)
+
+                    m = re.match('^E ([-0-9]+)( ([-0-9]+))?$', l)
+
+                    if m:
+                        value = int(m.group(1))
+                        # rospy.loginfo("%s: Receiver E got %d" % (self.node_name, value))
+                        # Spped
+                        # 80 ticks/wheel rotation,
+                        # circumfence 0.638m
+                        # every 0.1 seconds
+                        if len(m.group(3)) > 0:
+                            period = 0.001 * int(m.group(3))
+                        else:
+                            period = 0.1
+
+                        s = 0.638 * (float(value) / 80) / period   # now in m/s
+
+                        # rospy.loginfo("%s: Receiver E value= %d period= %f s= %f" % (self.node_name, value, period, s))
+                        self.speed_pub.publish(s)
             except serial.serialutil.SerialException:
                 rospy.loginfo("close serial")
 
