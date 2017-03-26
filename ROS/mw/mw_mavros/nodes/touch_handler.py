@@ -3,9 +3,12 @@
 import sys
 import time
 import rospy
-from std_msgs.msg import Bool, Int8, Int16
+import threading
+from std_msgs.msg import Bool, Float32, Int8, Int16
 from mavros_msgs.msg import OverrideRCIn, ParamValue
 from mavros_msgs.srv import CommandBool, ParamGet, ParamSet, SetMode, WaypointSetCurrent
+
+nodeLock = threading.Lock()
 
 class TouchHandler():
     def __init__(self):
@@ -14,6 +17,7 @@ class TouchHandler():
         self.current_wp = -1
         self.touch_value = -1
         self.finished = False
+        self.arduino_speed_value = 0.0
 
         self.apm_rc1_trim = 0
         self.apm_rc3_trim = 0
@@ -36,6 +40,7 @@ class TouchHandler():
         self.avoid_sub = rospy.Subscriber("/mw/avoid_direction", Int8, self.avoid_callback, queue_size = 1)
         self.current_sub = rospy.Subscriber("/mavros/mission/current", Int16, self.current_callback, queue_size = 1)
         self.touch_sub = rospy.Subscriber("/mw/touch", Int8, self.touch_callback, queue_size = 1)
+        self.arduino_speed_sub = rospy.Subscriber("/mw/speed", Float32, self.arduino_speed_callback, queue_size = 1)
         
         ret = None
         try:
@@ -82,6 +87,13 @@ class TouchHandler():
     def current_callback(self, cp):
         self.current_wp = cp.data
 
+    def arduino_speed_callback(self, tp):
+        nodeLock.acquire()
+        try:
+            self.arduino_speed_value = tp.data
+        finally:
+            nodeLock.release()
+
     def touch_callback(self, tp):
         touch = tp.data
 
@@ -106,7 +118,7 @@ class TouchHandler():
         # if not ret.success:
         #     rospy.logerr("Request failed. Check mavros logs")
 
-        orc = OverrideRCIn();
+        orc = OverrideRCIn()
         orc.channels[1] = 0
         orc.channels[3] = 0
         orc.channels[4] = 0
@@ -117,37 +129,52 @@ class TouchHandler():
         rospy.loginfo("%s: Neutral" % self.node_name)
         orc.channels[0] = self.apm_rc1_trim                    # Steering straight
         orc.channels[2] = self.apm_rc3_trim                    # Neutral for a bit
-        self.rc_override_pub.publish(orc);
+        self.rc_override_pub.publish(orc)
         time.sleep(0.05)                                       # Let the ESC prepare for the reverse
  
         rospy.loginfo("%s: Brake" % self.node_name)
         orc.channels[2] = self.apm_rc3_trim - 100              # Brake for a bit
-        self.rc_override_pub.publish(orc);
-        time.sleep(0.3)                                          # Let the brake work for a bit
+        self.rc_override_pub.publish(orc)
+
+        while True:                                            # Let the brake work for a bit
+            s = 0.0
+        
+            nodeLock.acquire()
+            try:
+                s = self.arduino_speed_value
+            finally:
+                nodeLock.release()
+
+            if s < 0.2:
+                break
+
+            time.sleep(0.1)
+
+        time.sleep(0.1)                                        # And some extra time
 
         rospy.loginfo("%s: Neutral" % self.node_name)
         orc.channels[2] = self.apm_rc3_trim                    # Neutral for a bit
-        self.rc_override_pub.publish(orc);
+        self.rc_override_pub.publish(orc)
         time.sleep(0.05)                                       # Let the ESC prepare for the reverse
 
         if self.avoid_direction == 3:                          # Finish/Stop
             self.finished = True
             orc.channels[0] = 0
             orc.channels[2] = 0
-            self.rc_override_pub.publish(orc);                 # Release
+            self.rc_override_pub.publish(orc)                  # Release
             time.sleep(0.05)
             self.sound_pub.publish(0)
 
             return                                             # XXX: For now!
  
         rospy.loginfo("%s: Back off" % self.node_name)
-        orc.channels[2] = self.apm_rc3_trim - 100 # 20150403 125              # Really back off
-        self.rc_override_pub.publish(orc);
+        orc.channels[2] = self.apm_rc3_trim - 175
+        self.rc_override_pub.publish(orc)
         time.sleep(2.5)
 
         rospy.loginfo("%s: Neutral" % self.node_name)
         orc.channels[2] = self.apm_rc3_trim                    # Neutral for a bit
-        self.rc_override_pub.publish(orc);
+        self.rc_override_pub.publish(orc)
         time.sleep(0.05)                                       # Let the ESC prepare for the reverse
  
         rospy.loginfo("%s: Turn forward" % self.node_name)
@@ -162,21 +189,21 @@ class TouchHandler():
             else:
                 orc.channels[0] = orc.channels[0] + 200
 
-        orc.channels[2] = self.apm_rc3_trim + 100              # Forward
-        self.rc_override_pub.publish(orc);
+        orc.channels[2] = self.apm_rc3_trim + 175              # Forward
+        self.rc_override_pub.publish(orc)
         time.sleep(1.5)                                        # Turn forward
 
         rospy.loginfo("%s: Straight forward" % self.node_name)
         orc.channels[0] = self.apm_rc1_trim
-        orc.channels[2] = self.apm_rc3_trim + 100
-        self.rc_override_pub.publish(orc);                     # Straight & neutral
-        time.sleep(1)
+        orc.channels[2] = self.apm_rc3_trim + 175
+        self.rc_override_pub.publish(orc)                      # Straight & neutral
+        time.sleep(0.5)
 
         rospy.loginfo("%s: Release" % self.node_name)
 
         orc.channels[0] = 0
         orc.channels[2] = 0
-        self.rc_override_pub.publish(orc);                     # Release
+        self.rc_override_pub.publish(orc)                      # Release
         time.sleep(0.05)
 
         if self.current_wp > 1:
