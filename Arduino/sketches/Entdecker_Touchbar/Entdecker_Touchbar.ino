@@ -8,6 +8,50 @@
 #define BUTTON_PIN_R 5
 #define LED_PIN 13
 
+//below can be changed, but should be PORTC pins
+#define ENC_PIN_A PC0  //pin A0
+#define ENC_PIN_B PC1  //pin A1
+
+volatile long encPos = 0L;
+static const int8_t ENC_STATES [] = { 0, 1, -1, 0, -1, 0, 0, 1, 1, 0, 0, -1, 0, -1, 1, 0 };  // encoder lookup table
+unsigned long encLastTime = 0;
+
+ISR (PCINT1_vect) {
+    static uint8_t encLast = 0;
+
+    encLast <<= 2;  // shift previous state two places
+    encLast |= (PINC & 3);  // read the current state into lowest 2 bits
+
+    encPos += ENC_STATES[(encLast & 0x0f)];
+}
+
+void initEncoder() {
+    // set as inputs
+    DDRC &= ~(1 << ENC_PIN_A);
+    DDRC &= ~(1 << ENC_PIN_B);
+
+    // enable pull up resistors
+    PORTC |= (1 << ENC_PIN_A);
+    PORTC |= (1 << ENC_PIN_B);
+
+    // tell pin change mask to listen to encoder pins
+    PCMSK1 |= (1 << ENC_PIN_A) | (1 << ENC_PIN_B);
+
+    // enable PCINT1 and PCINT2 interrupt in the general interrupt mask
+    // PCICR |= (1 << PCIE1) | (1 << PCIE2);
+    PCICR |= (1 << PCIE1);
+}
+
+// Wrap the encoder reading function
+long readEncoder() {
+    long r = encPos;
+
+    encPos = 0L;
+
+    return r;
+}
+
+
 // Adafruit_SSD1306 displayB(-1);
 Adafruit_SSD1306 display1(-1);
 Adafruit_SSD1306 display2(-1);
@@ -22,7 +66,7 @@ char display_buffer[2][4][12];
 unsigned char rgbBuffer[3];
 unsigned char input_p;
 char input_buffer[32];
-unsigned char rgbPins[3] = { 9, 10, 11 };
+unsigned char rgbPins[3] = { 11, 10, 9 };
 unsigned char buttonState = 0;
 
 boolean debounceStateL = 0;
@@ -65,6 +109,8 @@ void setup() {
     input_buffer[i] = 0;
   }
   input_p = 0;
+
+  initEncoder();
 
   Serial.print(F("Start - button: ")); Serial.println(digitalRead(BUTTON_PIN_L) << 1 | digitalRead(BUTTON_PIN_R));
 }
@@ -151,6 +197,16 @@ void loop() {
   else {
     digitalWrite(LED_PIN, LOW);
   }
+
+  timeStamp = millis();
+  long dt = timeStamp - encLastTime;
+
+  if (dt > 100) {
+    long e = readEncoder();
+
+    Serial.print("E "); Serial.print(e); Serial.print(" "); Serial.println(dt);
+    encLastTime = timeStamp;
+  }
 }
 
 void buffer_line(unsigned char d) {
@@ -178,14 +234,9 @@ void buffer_line(unsigned char d) {
   displayB.clearDisplay();
   displayB.setCursor(0, 0);
   displayB.setTextSize(2);
+  displayB.setTextColor(WHITE);
 
   for (l = 0; l < 4; l++) {
-    if (l % 2 == 0) {
-      displayB.setTextColor(WHITE);
-    }
-    else {
-      displayB.setTextColor(BLACK, WHITE);
-    }
     displayB.println(display_buffer[d][l]);
   }
 
