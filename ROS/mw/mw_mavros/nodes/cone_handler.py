@@ -11,12 +11,111 @@ import time
 import rospy
 from std_msgs.msg import Bool, Float32, Float64, Int8
 from sensor_msgs.msg import Imu, NavSatFix
-from mavros_msgs.msg import OverrideRCIn, ParamValue, Waypoint
+from mavros_msgs.msg import OverrideRCIn, ParamValue, RCOut, Waypoint
 from mavros_msgs.srv import ParamGet, ParamSet, SetMode
 from mw_video.msg import ConeLocation
 from geometry_msgs.msg import TwistStamped
 
 nodeLock = threading.Lock()
+
+NaN = float('nan')
+RC = 1.0 / (2.0 * math.pi * 20.0)
+
+class PID_Info:
+    P = 0.0
+    I = 0.0
+    D = 0.0
+    desired = 0.0
+
+class PID:
+    _Kp = 0.0
+    _Ki = 0.0
+    _Kd = 0.0
+    _integrator = 0.0
+    _last_derivative = 0.0
+    _last_error = 0.0
+    _last_t = 0
+    _imax = 5000.0
+    _pid_info = PID_Info()
+
+    def __init__(self, p, i, d):
+        self._Kp = p
+        self._Ki = i
+        self._Kd = d
+
+    def reset_i(self):
+        self._integrator = 0
+        # we use NAN (Not A Number) to indicate that the last
+        # derivative value is not valid
+        self._last_derivative = NaN
+        self._pid_info.I = 0.0
+
+    def get_pid(self, error, scaler = 1.0):
+        error = float(error)
+        tnow = time.clock() * 1000
+        dt = tnow - self._last_t
+
+        if self._last_t == 0 or dt > 1000:
+            dt = 0
+
+            # if this PID hasn't been used for a full second then zero
+            # the intergator term. This prevents I buildup from a
+            # previous fight mode from causing a massive return before
+            # the integrator gets a chance to correct itself
+            self.reset_i()
+
+        self._last_t = tnow
+        delta_time = float(dt) / 1000.0
+
+        # Compute proportional component
+        self._pid_info.P = error * self._Kp;
+        output = self._pid_info.P
+
+        # Compute derivative component if time has elapsed
+        if abs(self._Kd) > 0 and dt > 0:
+            derivative = 0.0
+
+            if math.isnan(self._last_derivative):
+                # we've just done a reset, suppress the first derivative
+                # term as we don't want a sudden change in input to cause
+                # a large D output change
+                derivative = 0.0
+                self._last_derivative = 0.0
+            else:
+                derivative = (error - self._last_error) / delta_time
+
+            # discrete low pass filter, cuts out the
+            # high frequency noise that can drive the controller crazy
+            derivative = self._last_derivative + (delta_time / (RC + delta_time)) * (derivative - self._last_derivative)
+
+            # update state
+            self._last_error = error
+            self._last_derivative = derivative
+
+            # add in derivative component
+            self._pid_info.D = self._Kd * derivative
+            output += self._pid_info.D
+
+        # scale the P and D components
+        output *= scaler
+        self._pid_info.D *= scaler
+        self._pid_info.P *= scaler
+
+        # Compute integral component if time has elapsed
+        if abs(self._Ki) > 0 and dt > 0:
+            self._integrator += (error * self._Ki) * scaler * delta_time
+
+            if self._integrator < -self._imax:
+                self._integrator = -self._imax
+            elif self._integrator > self._imax:
+                self._integrator = self._imax
+
+            self._pid_info.I = self._integrator
+            output += self._integrator
+
+        self._pid_info.desired = output
+
+        return output
 
 class ConeHandler():
     def __init__(self):
@@ -27,8 +126,7 @@ class ConeHandler():
         self.manual_start_time = None
         self.avoid_direction = 0                    # 1 - Left, 2 - Right
         self.z_angular_velocity = 0.0
-        self.x_linear_velocity = 0.0
-        self.last_throttle = 50
+        self.last_throttle = 0
         self.cone_seen_time = datetime(1990, 1, 1)
         self.last_cone_seen_time = datetime(1990, 1, 1)
         self.last_time = datetime.now()
@@ -45,10 +143,16 @@ class ConeHandler():
 
         self.apm_rc1_max = 0
         self.apm_rc1_min = 0
-        self.apm_rc1_rev = 0
+        self.apm_rc1_reversed = 0
         self.apm_rc1_trim = 0
 
         self.apm_rc3_trim = 0
+        self.apm_servo3_max = 0
+        self.apm_servo3_min = 0
+        self.apm_servo3_trim = 0
+        self.last_auto_rc3_raw = 0
+
+        self.throttle_pid = None
 
         self.auto_kickstart = -1
 
@@ -75,7 +179,7 @@ class ConeHandler():
         self.touch_sub = rospy.Subscriber("/mw/touch", Int8, self.touch_callback, queue_size = 1)
         self.arduino_speed_sub = rospy.Subscriber("/mw/speed", Float32, self.arduino_speed_callback, queue_size = 1)
         self.imu_sub = rospy.Subscriber("/mavros/imu/data", Imu, self.imu_callback, queue_size = 1)
-        self.gp_vel_sub = rospy.Subscriber("/mavros/global_position/raw/gps_vel", TwistStamped, self.gp_vel_callback, queue_size = 1)
+        self.rcout_sub = rospy.Subscriber("/mavros/rc/out", RCOut, self.rcout_callback, queue_size = 1)
 
         ret = None
         try:
@@ -167,14 +271,14 @@ class ConeHandler():
 
         ret = None
         try:
-            ret = self.get_param(param_id = 'RC1_REV')
+            ret = self.get_param(param_id = 'RC1_REVERSED')
         except rospy.ServiceException as ex:
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_rc1_rev = ret.value.integer
+            self.apm_rc1_reversed = ret.value.integer
         else:
-            rospy.logerr("get_param(RC1_REV) request failed. Check mavros logs")
+            rospy.logerr("get_param(RC1_REVERSED) request failed. Check mavros logs")
 
         ret = None
         try:
@@ -200,6 +304,91 @@ class ConeHandler():
 
         ret = None
         try:
+            ret = self.get_param(param_id = 'SERVO3_MAX')
+        except rospy.ServiceException as ex:
+            rospy.logerr(ex)
+
+        if ret != None and ret.success:
+            self.apm_servo3_max = ret.value.integer
+        else:
+            rospy.logerr("get_param(SERVO3_MAX) request failed. Check mavros logs")
+
+        ret = None
+        try:
+            ret = self.get_param(param_id = 'SERVO3_MIN')
+        except rospy.ServiceException as ex:
+            rospy.logerr(ex)
+
+        if ret != None and ret.success:
+            self.apm_servo3_min = ret.value.integer
+        else:
+            rospy.logerr("get_param(SERVO3_MIN) request failed. Check mavros logs")
+
+        ret = None
+        try:
+            ret = self.get_param(param_id = 'SERVO3_TRIM')
+        except rospy.ServiceException as ex:
+            rospy.logerr(ex)
+
+        if ret != None and ret.success:
+            self.apm_servo3_trim = ret.value.integer
+        else:
+            rospy.logerr("get_param(SERVO3_TRIM) request failed. Check mavros logs")
+
+        thr_p = 0.0
+        thr_i = 0.0
+        thr_d = 0.0
+        thr_imax = 0.0
+
+        ret = None
+        try:
+            ret = self.get_param(param_id = 'SPEED2THR_P')
+        except rospy.ServiceException as ex:
+            rospy.logerr(ex)
+
+        if ret != None and ret.success:
+            thr_p = ret.value.real
+        else:
+            rospy.logerr("get_param(SPEED2THR_P) request failed. Check mavros logs")
+
+        ret = None
+        try:
+            ret = self.get_param(param_id = 'SPEED2THR_I')
+        except rospy.ServiceException as ex:
+            rospy.logerr(ex)
+
+        if ret != None and ret.success:
+            thr_i = ret.value.real
+        else:
+            rospy.logerr("get_param(SPEED2THR_I) request failed. Check mavros logs")
+
+        ret = None
+        try:
+            ret = self.get_param(param_id = 'SPEED2THR_D')
+        except rospy.ServiceException as ex:
+            rospy.logerr(ex)
+
+        if ret != None and ret.success:
+            thr_d = ret.value.real
+        else:
+            rospy.logerr("get_param(SPEED2THR_D) request failed. Check mavros logs")
+
+        ret = None
+        try:
+            ret = self.get_param(param_id = 'SPEED2THR_IMAX')
+        except rospy.ServiceException as ex:
+            rospy.logerr(ex)
+
+        if ret != None and ret.success:
+            thr_imax = ret.value.integer
+        else:
+            rospy.logerr("get_param(SPEED2THR_IMAX) request failed. Check mavros logs")
+
+        self.throttle_pid = PID(thr_p, thr_i, thr_d)
+        self.throttle_pid._imax = thr_imax
+
+        ret = None
+        try:
             ret = self.get_param(param_id = 'AUTO_KICKSTART')
         except rospy.ServiceException as ex:
             rospy.logerr(ex)
@@ -214,7 +403,7 @@ class ConeHandler():
             (self.apm_steer2srv_tconst, self.apm_steer2srv_p, self.apm_steer2srv_i,
              self.apm_steer2srv_d, self.apm_steer2srv_imax, self.apm_steer2srv_minspd))
         rospy.loginfo("   rc1 _max= %d  _min= %d  _rev= %d  _trim= %d" %
-            (self.apm_rc1_max, self.apm_rc1_min, self.apm_rc1_rev, self.apm_rc1_trim))
+            (self.apm_rc1_max, self.apm_rc1_min, self.apm_rc1_reversed, self.apm_rc1_trim))
         rospy.loginfo("   rc3 _trim= %d" %
             (self.apm_rc3_trim))
 
@@ -239,12 +428,14 @@ class ConeHandler():
         finally:
             nodeLock.release()
 
-    def gp_vel_callback(self, ts):
-        nodeLock.acquire()
-        try:
-            self.x_linear_velocity = ts.twist.linear.x
-        finally:
-            nodeLock.release()
+    def rcout_callback(self, rcoutp):
+        if not self.is_manual:
+            nodeLock.acquire()
+            try:
+                self.last_auto_rc3_raw = rcoutp.channels[2]
+                self.last_throttle = 0
+            finally:
+                nodeLock.release()
 
     def touch_callback(self, tp):
         self.touch_value = tp.data
@@ -416,7 +607,7 @@ class ConeHandler():
     def rc1_angle_to_pwm(self, angle):
         _high = 4500
         reverse_mul = 1
-        if self.apm_rc1_rev == -1:
+        if self.apm_rc1_reversed == -1:
             reverse_mul = -1
 
         if angle * reverse_mul > 0:
@@ -489,41 +680,39 @@ class ConeHandler():
         return self.rc1_angle_to_pwm(ret)
 
     def calc_throttle(self, distance):
+        if self.last_throttle == 0:
+            # Find the last throttle used in auto mode (0.0 ... 1000.0)
+            # Similar to my change APMrover which uses 0.1s of pecents
+            rospy.loginfo("mw last_auto_rc3_raw= %d  apm_servo3_trim= %d  apm_servo3_max= %d" % (self.last_auto_rc3_raw, self.apm_servo3_trim, self.apm_servo3_max))
+
+            if self.last_auto_rc3_raw - self.apm_servo3_trim < 0:
+                # should not be negative
+                self.last_throttle = 0.01
+            else:
+                self.last_throttle = float(self.last_auto_rc3_raw - self.apm_servo3_trim) / float(self.apm_servo3_max - self.apm_servo3_trim) * 1000.0
+
+            self.throttle_pid.reset_i()
+
         last_t = self.last_throttle
-        target_vel = 0.5
         curr_vel = self.arduino_speed_value
 
         if distance < 3:
-            # return 50 # 75 # 20150403 84 # 77
-            # return 65 # 78 # 20150403 86 # 83
-            # return 75 # 85 # 20150403 95
             target_vel = 0.5
-            if curr_vel < target_vel * 0.95:
-                if self.last_throttle < 110:
-                    self.last_throttle = self.last_throttle + 2
-            elif curr_vel > target_vel * 1.05:
-                if self.last_throttle > 50:
-                    self.last_throttle = self.last_throttle - 2
         elif distance < 5:
             target_vel = 0.75
-            if curr_vel < target_vel * 0.95:
-                if self.last_throttle < 110:
-                    self.last_throttle = self.last_throttle + 5
-            elif curr_vel > target_vel * 1.05:
-                if self.last_throttle > 50:
-                    self.last_throttle = self.last_throttle -5
         else:
-            target_vel = 0.75
-            if curr_vel < target_vel * 0.95:
-                if self.last_throttle < 120:
-                    self.last_throttle = self.last_throttle + 8
-            elif curr_vel > target_vel * 1.05:
-                if self.last_throttle > 50:
-                    self.last_throttle = self.last_throttle -5
+            target_vel = 1.0
 
-        rospy.loginfo("mw target_vel=%f curr_vel= %f  last_t= %d curr_t= %d" % (target_vel, curr_vel, last_t, self.last_throttle))
+        error = target_vel - curr_vel
 
-        return self.last_throttle
+        self.last_throttle += self.throttle_pid.get_pid(error, 5.0)
+        self.last_throttle = self.constrain(self.last_throttle, 0.01, 1000.0)
+
+        thr_rc = int(self.last_throttle / 1000.0 * float(self.apm_servo3_max - self.apm_servo3_trim))
+
+        rospy.loginfo("mw target_vel=%f  curr_vel= %f  last_t= %f  curr_t= %f thr_rc= %d" % (target_vel, curr_vel, last_t, self.last_throttle, thr_rc))
+
+        return thr_rc
 
 def main(args):       
     try:
