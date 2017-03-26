@@ -53,6 +53,9 @@ class ConeHandler():
         self.auto_kickstart = -1
 
         rospy.init_node(self.node_name)
+
+        self.is_debug = rospy.get_param('~debug', False)
+        rospy.loginfo('%s: Parameter %s has value %s', self.node_name, rospy.resolve_name('~debug'), self.is_debug)
         
         rospy.wait_for_service('/mavros/set_mode')
         self.set_mode = rospy.ServiceProxy('/mavros/set_mode', SetMode)
@@ -358,7 +361,7 @@ class ConeHandler():
                 self.manual_start_time = datetime.now()
             elif self.avoid_direction != 3:
                 diff = datetime.now() - self.manual_start_time
-                if diff.total_seconds() > 60:
+                if diff.total_seconds() > 60 and not self.is_debug:
                     rospy.loginfo("EndManualThread in manual for %f, stopping search and go back to AUTO" % diff.total_seconds())
                     self.set_auto()
         else:
@@ -385,7 +388,8 @@ class ConeHandler():
 
             if not self.release_sent:
                 tdiff = datetime.now() - self.last_cone_seen_time 
-                if tdiff.total_seconds() > 0.75:
+                if tdiff.total_seconds() > 0.75 and not self.is_debug:
+                    rospy.loginfo("rc thread  datetime.now() - self.last_cone_seen_time = %f >  0.75", tdiff.total_seconds())
                     self.set_auto()
                     self.release_sent = True
                 else:
