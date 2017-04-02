@@ -109,6 +109,8 @@ for row in reader:
 fi.close()
 fo.close()
 
+subprocess.call([ "rosrun", "mavros", "mavcmd", "long", "--", "181", "1.0", "0.0", "0.0", "0.0", "0.0", "0.0", "0.0" ], stderr = subprocess.STDOUT)
+subprocess.call([ "rosrun", "mavros", "mavcmd", "long", "--", "181", "0.0", "0.0", "0.0", "0.0", "0.0", "0.0", "0.0" ], stderr = subprocess.STDOUT)
 time.sleep(10)
 subprocess.call([ "rosrun", "mavros", "mavsys", "-v", "mode", "-c", "MANUAL" ], stderr = subprocess.STDOUT)
 # subprocess.call([ "rosrun", "mavros", "mavcmd", "-v", "long", "--", "178", "1", "2.5", "-1", "0", "0", "0", "0" ], stderr = subprocess.STDOUT)
@@ -121,4 +123,3 @@ subprocess.call([ "rostopic", "pub", "-1", "/mavros/rc/override", "mavros_msgs/O
 subprocess.call([ "rosrun", "mavros", "mavwp", "-v", "load", oname ], stderr = subprocess.STDOUT)
 subprocess.call([ "rosrun", "mavros", "mavwp", "-v", "setcur", "0" ], stderr = subprocess.STDOUT)
 subprocess.call([ "rosrun", "mavros", "mavsys", "-v", "mode", "-c", "AUTO" ], stderr = subprocess.STDOUT)
-subprocess.call([ "rosrun", "mavros", "mavcmd", "long", "--", "181", "1.0", "0.0", "0.0", "0.0", "0.0", "0.0", "0.0" ], stderr = subprocess.STDOUT)
