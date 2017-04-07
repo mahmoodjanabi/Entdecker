@@ -30,6 +30,7 @@ class ConeHandler(BaseHandler):
         self.last_time = datetime.now()
         self.release_sent = False
         self.last_out = 0.0
+        self.direction = 0
         self.integrator = 0.0
 
         self.apm_steer2srv_tconst = 0.75
@@ -165,6 +166,7 @@ class ConeHandler(BaseHandler):
 
             if ret != None and ret.success:
                 self.is_manual = True
+                self.direction = 0
             else:
                 rospy.logerr("Request failed. Check mavros logs")
 
@@ -315,6 +317,31 @@ class ConeHandler(BaseHandler):
             target_vel = 1.0
 
         error = target_vel - curr_vel
+
+        if self.direction <= 0 and error <= -1.0:
+            # Brake for a bit
+            neg_now = (datetime.datetime(2000, 1, 1) - datetime.now()).total_seconds()
+
+            if self.direction == 0:
+                # short neutral
+                self.direction = neg_now
+                return 0
+            elif abs(neg_now - self.direction)  < 0.05:
+                return 0
+            elif abs(neg_now - self.direction) < 1.5:
+                # limit the brake time`
+                self.last_throttle = 0.01
+                return int(float(self.apm_servo3_min - self.apm_servo3_trim) * self.apm_braking_percent / 100.0)
+            else:
+                self.direction = (datetime.now() - datetime.datetime(2000, 1, 1)).total_seconds()
+
+        if self.direction > 1:
+            pos_now = (datetime.now() - datetime.datetime(2000, 1, 1)).total_seconds()
+            if pos_now - self.direction < 0.05:
+                # short neutral
+                return 0
+
+        self.direction = 1
 
         self.last_throttle += self.throttle_pid.get_pid(error, 7.5)
         self.last_throttle = self.constrain(self.last_throttle, 0.01, 1000.0)

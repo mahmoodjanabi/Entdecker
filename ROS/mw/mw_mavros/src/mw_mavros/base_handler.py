@@ -137,6 +137,7 @@ class BaseHandler(object):
         self.apm_servo3_max = 0
         self.apm_servo3_min = 0
         self.apm_servo3_trim = 0
+        self.apm_braking_percent = 0.0
         self.last_rc3_raw = 0
 
         self.throttle_pid = None
@@ -252,6 +253,17 @@ class BaseHandler(object):
 
         if ret != None and ret.success:
             self.apm_servo3_trim = ret.value.integer
+        else:
+            rospy.logerr("get_param(SERVO3_TRIM) request failed. Check mavros logs")
+
+        ret = None
+        try:
+            ret = self.get_param(param_id = 'BRAKING_PERCENT')
+        except rospy.ServiceException as ex:
+            rospy.logerr(ex)
+
+        if ret != None and ret.success:
+            self.apm_braking_percent = ret.value.integer
         else:
             rospy.logerr("get_param(SERVO3_TRIM) request failed. Check mavros logs")
 
