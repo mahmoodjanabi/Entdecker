@@ -46,7 +46,7 @@ class TouchHandler(BaseHandler):
             'target_speed' : 1.0,
             'target_time' : 1.0,
             'reset_pid' : True,
-            'steer_offset' : 200,
+            'steer_offset' : 300,
             'throttle_max' : 600.0,
             'throttle_min' : 0.1,
             'next' : 'forward'
@@ -93,7 +93,7 @@ class TouchHandler(BaseHandler):
     def current_callback(self, cp):
         self.current_wp = cp.data
 
-        if self.state == 'done' and self.current_wp == 1:
+        if self.state == 'done' and self.current_wp > 1:
             self.state = None
 
     def touch_callback(self, tp):
