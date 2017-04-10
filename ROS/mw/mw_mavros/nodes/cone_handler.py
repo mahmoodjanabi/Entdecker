@@ -318,28 +318,38 @@ class ConeHandler(BaseHandler):
 
         error = target_vel - curr_vel
 
+        rospy.loginfo("calc_throttle error= %f  direction= %f " % (error, self.direction))
+
         if self.direction <= 0 and error <= -1.0:
             # Brake for a bit
-            neg_now = (datetime.datetime(2000, 1, 1) - datetime.now()).total_seconds()
+            neg_now = (datetime(2000, 1, 1) - datetime.now()).total_seconds()
 
             if self.direction == 0:
                 # short neutral
                 self.direction = neg_now
+                rospy.loginfo("mw calc_throttle neutral")
+
                 return 0
             elif abs(neg_now - self.direction)  < 0.05:
+                rospy.loginfo("mw calc_throttle neutral wait")
                 return 0
             elif abs(neg_now - self.direction) < 1.5:
                 # limit the brake time`
                 self.last_throttle = 0.01
+                rospy.loginfo("mw brake = %d" % int(float(self.apm_servo3_min - self.apm_servo3_trim) * self.apm_braking_percent / 100.0))
+
                 return int(float(self.apm_servo3_min - self.apm_servo3_trim) * self.apm_braking_percent / 100.0)
             else:
-                self.direction = (datetime.now() - datetime.datetime(2000, 1, 1)).total_seconds()
+                self.direction = (datetime.now() - datetime(2000, 1, 1)).total_seconds()
 
         if self.direction > 1:
-            pos_now = (datetime.now() - datetime.datetime(2000, 1, 1)).total_seconds()
+            pos_now = (datetime.now() - datetime(2000, 1, 1)).total_seconds()
             if pos_now - self.direction < 0.05:
+                rospy.loginfo("mw calc_throttle neutral 2 wait")
                 # short neutral
                 return 0
+
+        rospy.loginfo("mw forward")
 
         self.direction = 1
 
