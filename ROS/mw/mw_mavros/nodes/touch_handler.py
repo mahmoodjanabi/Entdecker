@@ -20,7 +20,7 @@ class TouchHandler(BaseHandler):
             'max_time' : 2.0,
             'target_speed' : 0.0,
             'target_time' : 0.1,
-            'throttle_offset' : -150,
+            'throttle_offset' : -200,
             'next' : 'neutral_2'
         },
         'neutral_2' : {
@@ -29,7 +29,7 @@ class TouchHandler(BaseHandler):
             'next' : 'back'
         },
         'back' : {
-            'max_time' : 10.0,
+            'max_time' : 7.5,
             'target_speed' : -1.0,
             'target_time' : 1.5,
             'reset_pid' : True,
@@ -42,7 +42,7 @@ class TouchHandler(BaseHandler):
             'next' : 'turn'
         },
         'turn' : {
-            'max_time' : 10.0,
+            'max_time' : 5.0,
             'target_speed' : 1.0,
             'target_time' : 1.0,
             'reset_pid' : True,
@@ -52,15 +52,11 @@ class TouchHandler(BaseHandler):
             'next' : 'forward'
         },
         'forward' : {
-            'max_time' : 10.0,
+            'max_time' : 3.0,
             'target_speed' : 1.0,
             'target_time' : 0.5,
             'throttle_max' : 600.0,
             'throttle_min' : 0.1,
-            'next' : 'neutral_4'
-        },
-        'neutral_4' : {
-            'max_time' : 0.1, 
             'next' : 'done'
         },
         'done' : {
@@ -129,6 +125,7 @@ class TouchHandler(BaseHandler):
         if 'check_finish' in self.states[self.state].keys():
             if self.avoid_direction == 3:                          # Finish/Stop
                 self.state = 'done'
+                self.avoid_direction = 0
                 orc = OverrideRCIn()
                 orc.channels[0] = 0
                 orc.channels[1] = 0
@@ -138,7 +135,7 @@ class TouchHandler(BaseHandler):
                 orc.channels[5] = 0
                 orc.channels[6] = 0
                 orc.channels[7] = 0
-                rospy.loginfo("Send rc: %d %d" % (orc.channels[0], orc.channels[2]))
+                rospy.loginfo("advance_state Send rc: %d %d" % (orc.channels[0], orc.channels[2]))
                 self.rc_override_pub.publish(orc)                  # Release
                 self.sound_pub.publish(0)
                 self.is_manual = False
