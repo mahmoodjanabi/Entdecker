@@ -60,6 +60,8 @@ class TouchHandler(BaseHandler):
             'next' : 'done'
         },
         'done' : {
+        },
+        'finished' : {
         }
     }
 
@@ -91,6 +93,11 @@ class TouchHandler(BaseHandler):
 
         if self.state == 'done' and self.current_wp > 1:
             self.state = None
+
+        # Rearm for the new run
+        if self.state == 'finished' and self.current_wp < 3:
+            self.state = None
+            self.is_manual = False
 
     def touch_callback(self, tp):
         self.nodeLock.acquire()
@@ -124,7 +131,7 @@ class TouchHandler(BaseHandler):
     def advance_state(self):
         if 'check_finish' in self.states[self.state].keys():
             if self.avoid_direction == 3:                          # Finish/Stop
-                self.state = 'done'
+                self.state = 'finished'
                 self.avoid_direction = 0
                 orc = OverrideRCIn()
                 orc.channels[0] = 0
@@ -138,7 +145,6 @@ class TouchHandler(BaseHandler):
                 rospy.loginfo("advance_state Send rc: %d %d" % (orc.channels[0], orc.channels[2]))
                 self.rc_override_pub.publish(orc)                  # Release
                 self.sound_pub.publish(0)
-                self.is_manual = False
 
                 return True                                            # XXX: For now!
 
@@ -165,7 +171,7 @@ class TouchHandler(BaseHandler):
         if not self.is_manual:
             return
 
-        if self.state == 'done':
+        if self.state == 'done' or self.state == 'finished':
             return
 
         self.nodeLock.acquire()
