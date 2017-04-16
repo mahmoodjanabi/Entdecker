@@ -1,4 +1,8 @@
 #include <Servo.h>
+#if !defined(REFRESH_INTERVAL) || (REFRESH_INTERVAL > 10000)
+#error "Change the REFRESH_INTERVAL to 10000 for the XMAXX"
+#endif
+
 #include <SPI.h>
 #include "nRF24L01.h"
 #include "RF24.h"
@@ -12,9 +16,9 @@
 
 #define CONTROL_MASTER 0
 #define CONTROL_SLAVE 120
-#define THROTTLE_NEUTRAL 90
-#define THROTTLE_BRAKE   70    // 80
-#define STEERING_VALUE 1446
+#define THROTTLE_NEUTRAL 1500
+#define THROTTLE_BRAKE   1350
+#define STEERING_VALUE 1500
 
 #define LED_RED 3
 #define LED_YELLOW 1
@@ -59,10 +63,10 @@ void setup() {
   pinMode(RPM_SENSOR, INPUT_PULLUP);
 
   servoControl.write(CONTROL_MASTER);
-  servoThrottle.write(THROTTLE_NEUTRAL);
+  servoThrottle.writeMicroseconds(THROTTLE_NEUTRAL);
   servoSteering.writeMicroseconds(STEERING_VALUE);
   delay(3000);
-  servoThrottle.write(THROTTLE_BRAKE);
+  servoThrottle.writeMicroseconds(THROTTLE_BRAKE);
   digitalWrite(LED_RED, LOW);
   digitalWrite(LED_GREEN, LOW);
   digitalWrite(LED_YELLOW, LOW);
@@ -72,7 +76,7 @@ void setup() {
   radio.begin();
   radio.setPALevel(RF24_PA_MAX);
   radio.setDataRate(RF24_250KBPS);
-//  radio.setRetries(0, 15);
+  radio.setRetries(0, 15);
   radio.setPayloadSize(COMMAND_LEN);
   radio.setAutoAck(true);
 
@@ -103,8 +107,8 @@ void loop() {
     unsigned long dtime = stop_time - time;
 
     if (dtime < 200) {
-      if (servoThrottle.read() != THROTTLE_NEUTRAL) {
-        servoThrottle.write(THROTTLE_NEUTRAL);
+      if (servoThrottle.readMicroseconds() != THROTTLE_NEUTRAL) {
+        servoThrottle.writeMicroseconds(THROTTLE_NEUTRAL);
       }
     }
     else {
@@ -116,8 +120,8 @@ void loop() {
           last_rpm_duration = duration;
           digitalWrite(LED_GREEN, HIGH);
 
-          if (servoThrottle.read() != THROTTLE_BRAKE) {
-            servoThrottle.write(THROTTLE_BRAKE);
+          if (servoThrottle.readMicroseconds() != THROTTLE_BRAKE) {
+            servoThrottle.writeMicroseconds(THROTTLE_BRAKE);
           }
         }
         else {
@@ -125,8 +129,8 @@ void loop() {
         }
       }
 
-      if (stopped && servoThrottle.read() != THROTTLE_NEUTRAL) {
-        servoThrottle.write(THROTTLE_NEUTRAL);
+      if (stopped && servoThrottle.readMicroseconds() != THROTTLE_NEUTRAL) {
+        servoThrottle.writeMicroseconds(THROTTLE_NEUTRAL);
       }
     }
   }
@@ -135,7 +139,7 @@ void loop() {
     digitalWrite(LED_GREEN, HIGH);
 
     if (!going) {
-      servoThrottle.write(THROTTLE_NEUTRAL);
+      servoThrottle.writeMicroseconds(THROTTLE_NEUTRAL);
       go_time = time;
       going = true;
     }
@@ -168,16 +172,31 @@ void loop() {
 
   if (radio.available()) {
     char received[COMMAND_LEN];
+    bool got_packet = false;
 
     while (radio.available()) {
-      radio.read(received, COMMAND_LEN);
+      if (radio.getDynamicPayloadSize() < 1) {
+        // Corrupt payload has been flushed
+      }
+      else {
+        radio.read(received, COMMAND_LEN);
+        got_packet = true;
+      }
     }
 
-    rx_time = millis();
-    rx_buff = received[0];
+    if (got_packet) {
+      rx_time = millis();
+      rx_buff = received[0];
+    }
 
     radio.stopListening();
     radio.write(command_ok, COMMAND_LEN);
     radio.startListening();
+  }
+
+  unsigned long time_stop = millis();
+
+  if (time_stop - time < 50) {
+    delay(50 + time - time_stop);
   }
 }
