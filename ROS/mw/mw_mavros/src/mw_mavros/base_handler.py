@@ -120,6 +120,8 @@ class BaseHandler(object):
 
     def __init__(self):
         self.nodeLock = threading.Lock()
+        self.conditionVariable = threading.Condition(self.nodeLock)
+        self.updates = 0
 
         self.arduino_speed_value = 0.0
         self.avoid_direction = 0                    # 1 - Left, 2 - Right, 3 - Stop
@@ -326,11 +328,10 @@ class BaseHandler(object):
             (self.apm_rc3_trim))
 
     def arduino_speed_callback(self, tp):
-        self.nodeLock.acquire()
-        try:
+        with self.conditionVariable:
             self.arduino_speed_value = tp.data
-        finally:
-            self.nodeLock.release()
+            self.updates += 1
+            self.conditionVariable.notify()
 
     def avoid_callback(self, av):
         self.avoid_direction = av.data
@@ -339,21 +340,15 @@ class BaseHandler(object):
             self.is_manual = False
 
     def rcout_callback(self, rcoutp):
-        self.nodeLock.acquire()
-        try:
+        with self.nodeLock:
             self.last_rc3_raw = rcoutp.channels[2]
 
             if not self.is_manual:
                 self.last_throttle = 0
-        finally:
-            self.nodeLock.release()
 
     def state_callback(self, sp):
-        self.nodeLock.acquire()
-        try:
+        with self.nodeLock:
             self.fcu_mode = sp.mode
-        finally:
-            self.nodeLock.release()
 
 
     def constrain(self, v, nmin, nmax):
@@ -391,11 +386,8 @@ class BaseHandler(object):
             rospy.logerr("sound_pub() exception")
 
         mode = None
-        self.nodeLock.acquire()
-        try:
+        with self.nodeLock:
             mode = self.fcu_mode
-        finally:
-            self.nodeLock.release()
 
         if mode == None or mode != 'AUTO':
             orc = OverrideRCIn();

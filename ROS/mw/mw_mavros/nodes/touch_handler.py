@@ -5,7 +5,7 @@ import sys
 import time
 import rospy
 import threading
-from std_msgs.msg import Int8, Int16
+from std_msgs.msg import Float32, Int8, Int16
 from mavros_msgs.msg import OverrideRCIn, ParamValue
 
 from mw_mavros.base_handler import BaseHandler
@@ -14,9 +14,9 @@ class TouchHandler(BaseHandler):
     states = {
         'neutral_1' : {
             'max_time' : 0.05, 
-            'next' : 'brake'
+            'next' : 'brake_1'
         },
-        'brake' : {
+        'brake_1' : {
             'max_time' : 2.0,
             'target_speed' : 0.0,
             'target_time' : 0.1,
@@ -30,6 +30,7 @@ class TouchHandler(BaseHandler):
         },
         'back' : {
             'max_time' : 7.5,
+            'target_distance' : -3.0,
             'target_speed' : -1.0,
             'target_time' : 1.5,
             'reset_pid' : True,
@@ -38,11 +39,24 @@ class TouchHandler(BaseHandler):
             'next' : 'neutral_3'
         },
         'neutral_3' : {
-            'max_time' : 0.5, 
+            'max_time' : 0.05, 
+            'next' : 'brake_2'
+        },
+        # brake for a bit
+        'brake_2' : {
+            'max_time' : 2.0,
+            'target_speed' : 0.0,
+            'target_time' : 0.1,
+            'throttle_offset' : 200,
+            'next' : 'neutral_4'
+        },
+        'neutral_4' : {
+            'max_time' : 0.1, 
             'next' : 'turn'
         },
         'turn' : {
             'max_time' : 5.0,
+            'target_distance' : 1.25,
             'target_speed' : 1.0,
             'target_time' : 1.0,
             'reset_pid' : True,
@@ -53,6 +67,7 @@ class TouchHandler(BaseHandler):
         },
         'forward' : {
             'max_time' : 3.0,
+            'target_distance' : 1.5,
             'target_speed' : 1.0,
             'target_time' : 0.5,
             'throttle_max' : 600.0,
@@ -65,26 +80,33 @@ class TouchHandler(BaseHandler):
         }
     }
 
-            
+
     def __init__(self):
         self.node_name = "mwMavrosTouchHandler"
 
         super(self.__class__, self).__init__()
 
         self.current_wp = -1
+        self.encoder_distance = 0
         self.touch_value = -1
         self.state = None
         self.state_start = 0
         self.state_target_speed_reached = None
+        self.state_target_distance = None
 
         self.current_sub = rospy.Subscriber("/mavros/mission/current", Int16, self.current_callback, queue_size = 1)
+        self.enc_sub = rospy.Subscriber("/mw/encoder_distance", Float32, self.encoder_callback, queue_size = 1)
         self.touch_sub = rospy.Subscriber("/mw/touch", Int8, self.touch_callback, queue_size = 1)
 
         while not rospy.is_shutdown():
             self.check_end()
             self.send_rc_command()
 
-            time.sleep(0.02)
+            with self.conditionVariable:
+                if self.updates > 0:
+                    self.updates = 0
+                else:
+                    self.conditionVariable.wait(0.02)
 
         rospy.loginfo("%s: Done." % self.node_name)
 
@@ -99,12 +121,15 @@ class TouchHandler(BaseHandler):
             self.state = None
             self.is_manual = False
 
+    def encoder_callback(self, ep):
+        with self.conditionVariable:
+            self.encoder_distance = ep.data
+            self.updates += 1
+            self.conditionVariable.notify()
+
     def touch_callback(self, tp):
-        self.nodeLock.acquire()
-        try:
+        with self.nodeLock:
             touch = tp.data
-        finally:
-            self.nodeLock.release()
 
         if self.touch_value == touch:
             return
@@ -128,7 +153,14 @@ class TouchHandler(BaseHandler):
             else:
                 rospy.logerr("Request failed. Check mavros logs")
 
+        with self.conditionVariable:
+            self.updates += 1
+            self.conditionVariable.notify()
+
     def advance_state(self):
+        self.state_target_speed_reached = None
+        self.state_target_distance = None
+
         if 'check_finish' in self.states[self.state].keys():
             if self.avoid_direction == 3:                          # Finish/Stop
                 self.state = 'finished'
@@ -150,7 +182,6 @@ class TouchHandler(BaseHandler):
 
         self.state = self.states[self.state]['next']
         self.state_start = datetime.now()
-        self.state_target_speed_reached = None
 
         if self.state == 'done':
             if self.current_wp > 1:
@@ -174,14 +205,13 @@ class TouchHandler(BaseHandler):
         if self.state == 'done' or self.state == 'finished':
             return
 
-        self.nodeLock.acquire()
-        try:
+        with self.nodeLock:
             avoid = self.avoid_direction
             speed = self.arduino_speed_value
             touch = self.touch_value
             last_rc3 = self.last_rc3_raw
-        finally:
-            self.nodeLock.release()
+            enc = self.encoder_distance
+            self.updates = 0
 
         if self.state == None:
             self.state = 'neutral_1'
@@ -193,6 +223,16 @@ class TouchHandler(BaseHandler):
         if diff >= self.states[self.state]['max_time']:
             if self.advance_state():
                 return
+
+        if 'target_distance' in self.states[self.state].keys():
+            if self.state_target_distance == None:
+                self.state_target_distance = enc
+
+            d = enc - self.state_target_distance
+            td = self.states[self.state]['target_distance']
+            if (td < 0 and d <= td) or (td > 0 and d >= td):
+                if self.advance_state():
+                    return
 
         if 'target_speed' in self.states[self.state].keys():
             if abs(speed - self.states[self.state]['target_speed']) <= 0.2 and self.state_target_speed_reached == None:

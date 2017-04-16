@@ -118,16 +118,17 @@ class ConeHandler(BaseHandler):
             self.check_end()
             self.send_rc_command()
 
-            time.sleep(0.02)
+            with self.conditionVariable:
+                if self.updates > 0:
+                    self.updates = 0
+                else:
+                    self.conditionVariable.wait(0.02)
 
         rospy.loginfo("%s: Done." % self.node_name)
 
     def imu_callback(self, imup):
-        self.nodeLock.acquire()
-        try:
+        with self.nodeLock:
             self.z_angular_velocity = math.degrees(imup.angular_velocity.z)
-        finally:
-            self.nodeLock.release()
 
     def touch_callback(self, tp):
         self.touch_value = tp.data
@@ -145,13 +146,10 @@ class ConeHandler(BaseHandler):
                 rospy.logerr("sound_pub() exception")
 
     def cone_callback(self, cp):
-        self.nodeLock.acquire()
-        try:
+        with self.nodeLock:
             self.distance = cp.distance
             self.delta_heading = cp.heading
             self.cone_seen_time = datetime.now()
-        finally:
-            self.nodeLock.release()
 
         rospy.loginfo("distance: %f  delta_heading: %f" % (self.distance, self.delta_heading))
 
@@ -170,10 +168,13 @@ class ConeHandler(BaseHandler):
             else:
                 rospy.logerr("Request failed. Check mavros logs")
 
+        with self.conditionVariable:
+            self.updates += 1
+            self.conditionVariable.notify()
+
     def send_rc_command(self):
         if self.is_manual:
-            self.nodeLock.acquire()
-            try:
+            with self.nodeLock:
                 z_angular_velocity = self.z_angular_velocity
                 distance = self.distance
                 delta_heading = self.delta_heading
@@ -182,8 +183,8 @@ class ConeHandler(BaseHandler):
                 if tdiff.total_seconds() != 0:
                     self.last_cone_seen_time = self.cone_seen_time
                     self.release_sent = False
-            finally:
-                self.nodeLock.release()
+
+                self.updates = 0
 
             rospy.loginfo("rc thread z_ang= %f, dist= %f, delta_hdg= %f" % (z_angular_velocity, distance, delta_heading))
 
