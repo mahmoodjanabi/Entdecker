@@ -24,10 +24,11 @@ class Receiver():
         self.touch_pub = rospy.Publisher("/mw/touch", Int8, queue_size = 1)
         self.search_pub = rospy.Publisher("/mw/search", Bool, queue_size = 1)
         self.speed_pub = rospy.Publisher("/mw/speed", Float32, queue_size = 1)
+        self.enc_pub = rospy.Publisher("/mw/encoder_distance", Float32, queue_size = 1)
         
         self.solution_sub = rospy.Subscriber("/solution", GpsLocation, self.solution_callback, queue_size = 1)
         self.wp_current_sub = rospy.Subscriber("/mavros/mission/current", Int16, self.wp_current_callback, queue_size = 1)
-        self.wp_reached_sub = rospy.Subscriber("/mavros/mission/current", Int16, self.wp_reached_callback, queue_size = 1)
+        self.wp_reached_sub = rospy.Subscriber("/mavros/mission/reached", Int16, self.wp_reached_callback, queue_size = 1)
         self.cone_location_sub = rospy.Subscriber("/mw/cone_location", ConeLocation, self.cone_callback, queue_size = 1)
         self.last_display_update = 0.0
         self.fix = 0
@@ -120,12 +121,12 @@ class Receiver():
                         if value > 0:
                             self.search_pub.publish(False)
 
-                    m = re.match('^E ([-0-9]+)( ([-0-9]+))?$', l)
+                    m = re.match('^E ([-0-9]+)( ([-0-9]+))?( ([-0-9]+))?$', l)
 
                     if m:
                         value = int(m.group(1))
                         # rospy.loginfo("%s: Receiver E got %d" % (self.node_name, value))
-                        # Spped
+                        # Speed
                         # 80 ticks/wheel rotation,
                         # circumfence 0.638m
                         # every 0.1 seconds
@@ -138,6 +139,15 @@ class Receiver():
 
                         # rospy.loginfo("%s: Receiver E value= %d period= %f s= %f" % (self.node_name, value, period, s))
                         self.speed_pub.publish(s)
+
+                        if len(m.group(5)) > 0:
+                            e = int(m.group(5))
+
+                            # distance (increment/decrement)
+                            # 80 ticks/wheel rotation,
+                            # circumfence 0.638m
+                            d = 0.638 * (float(e) / 80)
+                            self.enc_pub.publish(d)
             except serial.serialutil.SerialException:
                 rospy.loginfo("close serial")
 
@@ -153,6 +163,10 @@ class Receiver():
 
     def wp_current_callback(self, wp):
         self.wp_current = wp.data
+
+        if self.wp_current == 1:
+            self.serial_port.write("E\n")
+
         return
 
     def wp_reached_callback(self, wp):

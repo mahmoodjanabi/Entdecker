@@ -13,6 +13,7 @@
 #define ENC_PIN_B PC1  //pin A1
 
 volatile long encPos = 0L;
+long encSum = 0L;
 static const int8_t ENC_STATES [] = { 0, 1, -1, 0, -1, 0, 0, 1, 1, 0, 0, -1, 0, -1, 1, 0 };  // encoder lookup table
 unsigned long encLastTime = 0;
 
@@ -139,6 +140,9 @@ void loop() {
       else if (input_buffer[0] == 'l') {
         buffer_led();
       }
+      else if (input_buffer[0] == 'E') {
+        encSum = 0L;
+      }
 
       for (int i = 0; i < 32; i++) {
         input_buffer[i] = 0;
@@ -204,7 +208,9 @@ void loop() {
   if (dt > 100) {
     long e = readEncoder();
 
-    Serial.print("E "); Serial.print(e); Serial.print(" "); Serial.println(dt);
+    encSum += e;
+
+    Serial.print("E "); Serial.print(e); Serial.print(" "); Serial.print(dt); Serial.print(" "); Serial.println(encSum);
     encLastTime = timeStamp;
   }
 }
