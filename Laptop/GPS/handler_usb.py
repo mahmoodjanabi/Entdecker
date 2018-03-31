@@ -56,10 +56,10 @@ class GpsReader(threading.Thread):
             raise RunTimeError
 
         self.start_called = True
-        fn = subprocess.check_output(["/export/home/marcow/bin/find_last", "sol2_*.pos"]).rstrip()
+        # fn = subprocess.check_output(["/export/home/marcow/bin/find_last", "sol2_*.pos"]).rstrip()
 
-        self.fin = open(fn, 'r')
-        # self.fin = serial.Serial('/dev/ttyUSB0', 115200, timeout = 1)
+        # self.fin = open(fn, 'r')
+        self.fin = serial.Serial('/dev/ttyUSB0', 115200, timeout = 1)
 
 
         i = 0                              # Just read some lines
