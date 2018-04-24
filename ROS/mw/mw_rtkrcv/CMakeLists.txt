@@ -63,7 +63,7 @@ include_directories(
 add_executable(rtkrcv src/binex.c src/crescent.c src/ephemeris.c src/geoid.c src/gw10.c src/ionex.c src/javad.c src/lambda.c src/novatel.c src/nvs.c src/options.c src/pntpos.c src/ppp.c src/ppp_ar.c src/ppp_corr.c src/preceph.c src/qzslex.c src/rcvraw.c src/rinex.c src/rt17.c src/rtcm.c src/rtcm2.c src/rtcm3.c src/rtcm3e.c src/rtkcmn.c src/rtkpos.c src/rtkrcv.c src/rtkrcv_publish.cpp src/rtksvr.c src/sbas.c src/septentrio.c src/skytraq.c src/solution.c src/ss2.c src/stream.c src/tides.c src/ublox.c src/vt.c src/cmr.c)
 add_dependencies(rtkrcv mw_rtkrcv_generate_messages_cpp)
 
-set_target_properties(rtkrcv PROPERTIES COMPILE_FLAGS "-mfpu=neon -ffast-math -DENAGLO -DENAQZS -DENACMP -DNFREQ=3 -Wall -O3 -ansi -pedantic -Wno-unused-but-set-variable -Isrc -I. -DTRACE ")
+set_target_properties(rtkrcv PROPERTIES COMPILE_FLAGS "-mfpu=neon -ffast-math -DENAGLO -DENAQZS -DENACMP -DNFREQ=3 -DRTKLIB_ROS -Wall -O3 -ansi -pedantic -Wno-unused-but-set-variable -Isrc -I. -DTRACE ")
 target_link_libraries(rtkrcv ${catkin_LIBRARIES} -lm -lrt -lpthread)
 
 #############
