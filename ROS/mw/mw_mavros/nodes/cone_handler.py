@@ -27,6 +27,7 @@ class ConeHandler(BaseHandler):
         self.z_angular_velocity = 0.0
         self.cone_seen_time = datetime(1990, 1, 1)
         self.last_cone_seen_time = datetime(1990, 1, 1)
+        self.last_touch = datetime(1990, 1, 1)
         self.last_time = datetime.now()
         self.release_sent = False
         self.last_out = 0.0
@@ -34,7 +35,7 @@ class ConeHandler(BaseHandler):
         self.integrator = 0.0
 
         self.apm_steer2srv_tconst = 0.75
-        self.apm_steer2srv_p = 1.8
+        self.apm_steer2srv_p = 2.05
         self.apm_steer2srv_i = 0.2
         self.apm_steer2srv_d = 0.005
         self.apm_steer2srv_imax = 1500
@@ -44,71 +45,60 @@ class ConeHandler(BaseHandler):
         self.touch_sub = rospy.Subscriber("/mw/touch", Int8, self.touch_callback, queue_size = 1)
         self.imu_sub = rospy.Subscriber("/mavros/imu/data", Imu, self.imu_callback, queue_size = 1)
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'STEER2SRV_TCONST')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'STEER2SRV_TCONST')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            self.apm_steer2srv_tconst = ret.value.real
-        else:
-            rospy.logerr("get_param(STEER2SRV_TCONST) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     self.apm_steer2srv_tconst = ret.value.real
+        # else:
+        #     rospy.logerr("get_param(STEER2SRV_TCONST) request failed. Check mavros logs")
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'STEER2SRV_P')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'ATC_STR_RAT_P')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            self.apm_steer2srv_p = ret.value.real
-        else:
-            rospy.logerr("get_param(STEER2SRV_P) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     self.apm_steer2srv_p = ret.value.real
+        # else:
+        #     rospy.logerr("get_param(ATC_STR_RAT_P) request failed. Check mavros logs")
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'STEER2SRV_I')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'ATC_STR_RAT_I')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            self.apm_steer2srv_i = ret.value.real
-        else:
-            rospy.logerr("get_param(STEER2SRV_I) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     self.apm_steer2srv_i = ret.value.real
+        # else:
+        #     rospy.logerr("get_param(ATC_STR_RAT_I) request failed. Check mavros logs")
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'STEER2SRV_D')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'ATC_STR_RAT_D')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            self.apm_steer2srv_d = ret.value.real
-        else:
-            rospy.logerr("get_param(STEER2SRV_D) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     self.apm_steer2srv_d = ret.value.real
+        # else:
+        #     rospy.logerr("get_param(ATC_STR_RAT_D) request failed. Check mavros logs")
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'STEER2SRV_IMAX')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'ATC_STR_RAT_IMAX')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            self.apm_steer2srv_imax = ret.value.integer
-        else:
-            rospy.logerr("get_param(STEER2SRV_IMAX) request failed. Check mavros logs")
-
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'STEER2SRV_MINSPD')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
-
-        if ret != None and ret.success:
-            self.apm_steer2srv_minspd = ret.value.real
-        else:
-            rospy.logerr("get_param(STEER2SRV_MINSPD) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     self.apm_steer2srv_imax = ret.value.integer
+        # else:
+        #     rospy.logerr("get_param(ATC_STR_RAT_IMAX) request failed. Check mavros logs")
 
         rospy.loginfo("   _tconst= %f  _p= %f  _i= %f  _d= %f  _imax= %d  _minspd= %f" %
             (self.apm_steer2srv_tconst, self.apm_steer2srv_p, self.apm_steer2srv_i,
@@ -134,6 +124,7 @@ class ConeHandler(BaseHandler):
         self.touch_value = tp.data
         if self.touch_value > 0:
             self.is_manual = False
+            self.last_touch = datetime.now()
 
             try:
                 self.search_pub.publish(False)
@@ -153,7 +144,8 @@ class ConeHandler(BaseHandler):
 
         rospy.loginfo("distance: %f  delta_heading: %f" % (self.distance, self.delta_heading))
 
-        if not self.is_manual and self.touch_value == 0:
+        if not self.is_manual and self.touch_value == 0 and (self.cone_seen_time - self.last_touch).total_seconds() > 1.0:
+            # 1 second to make sure, all the old/parallel image messages are handled 
             rospy.loginfo("%s: cone_callback - Set MANUAL" % (self.node_name))
 
             ret = None
@@ -218,7 +210,7 @@ class ConeHandler(BaseHandler):
     def rc1_angle_to_pwm(self, angle):
         _high = 4500
         reverse_mul = 1
-        if self.apm_rc1_reversed == -1:
+        if self.apm_rc1_reversed != 0:
             reverse_mul = -1
 
         if angle * reverse_mul > 0:
@@ -297,13 +289,13 @@ class ConeHandler(BaseHandler):
         if self.last_throttle == 0:
             # Find the last throttle used in auto mode (0.0 ... 1000.0)
             # Similar to my change APMrover which uses 0.1s of pecents
-            rospy.loginfo("mw last_rc3_raw= %d  apm_servo3_trim= %d  apm_servo3_max= %d" % (self.last_rc3_raw, self.apm_servo3_trim, self.apm_servo3_max))
+            rospy.loginfo("mw last_rc3_raw= %d  apm_rc3_trim= %d  apm_rc3_max= %d" % (self.last_rc3_raw, self.apm_rc3_trim, self.apm_rc3_max))
 
-            if self.last_rc3_raw - self.apm_servo3_trim < 0:
+            if self.last_rc3_raw - self.apm_rc3_trim < 0:
                 # should not be negative
                 self.last_throttle = 0.01
             else:
-                self.last_throttle = float(self.last_rc3_raw - self.apm_servo3_trim) / float(self.apm_servo3_max - self.apm_servo3_trim) * 1000.0
+                self.last_throttle = float(self.last_rc3_raw - self.apm_rc3_trim) / float(self.apm_rc3_max - self.apm_rc3_trim) * 1000.0
 
             self.throttle_pid.reset_i()
 
@@ -319,7 +311,7 @@ class ConeHandler(BaseHandler):
 
         error = target_vel - curr_vel
 
-        rospy.loginfo("calc_throttle error= %f  direction= %f " % (error, self.direction))
+        rospy.loginfo("calc_throttle speed= %f  error= %f  direction= %f " % (curr_vel, error, self.direction))
 
         if self.direction <= 0 and error <= -1.0:
             # Brake for a bit
@@ -337,9 +329,9 @@ class ConeHandler(BaseHandler):
             elif abs(neg_now - self.direction) < 1.5:
                 # limit the brake time`
                 self.last_throttle = 0.01
-                rospy.loginfo("mw brake = %d" % int(float(self.apm_servo3_min - self.apm_servo3_trim) * self.apm_braking_percent / 100.0))
+                rospy.loginfo("mw brake = %d" % int(float(self.apm_rc3_min - self.apm_rc3_trim) * self.apm_braking_percent / 100.0))
 
-                return int(float(self.apm_servo3_min - self.apm_servo3_trim) * self.apm_braking_percent / 100.0)
+                return int(float(self.apm_rc3_min - self.apm_rc3_trim) * self.apm_braking_percent / 100.0)
             else:
                 self.direction = (datetime.now() - datetime(2000, 1, 1)).total_seconds()
 
@@ -357,7 +349,7 @@ class ConeHandler(BaseHandler):
         self.last_throttle += self.throttle_pid.get_pid(error, 7.5)
         self.last_throttle = self.constrain(self.last_throttle, 0.01, 1000.0)
 
-        thr_rc = int(self.last_throttle / 1000.0 * float(self.apm_servo3_max - self.apm_servo3_trim))
+        thr_rc = int(self.last_throttle / 1000.0 * float(self.apm_rc3_max - self.apm_rc3_trim))
 
         rospy.loginfo("mw target_vel=%f  curr_vel= %f  last_t= %f  curr_t= %f thr_rc= %d" % (target_vel, curr_vel, last_t, self.last_throttle, thr_rc))
 

@@ -136,10 +136,10 @@ class BaseHandler(object):
         self.apm_rc1_trim = 0
 
         self.apm_rc3_trim = 0
-        self.apm_servo3_max = 0
-        self.apm_servo3_min = 0
-        self.apm_servo3_trim = 0
-        self.apm_braking_percent = 0.0
+        self.apm_rc3_max = 0
+        self.apm_rc3_min = 0
+        self.apm_rc3_trim = 0
+        self.apm_braking_percent = 30.0
         self.last_rc3_raw = 0
 
         self.throttle_pid = None
@@ -227,96 +227,96 @@ class BaseHandler(object):
 
         ret = None
         try:
-            ret = self.get_param(param_id = 'SERVO3_MAX')
+            ret = self.get_param(param_id = 'RC3_MAX')
         except rospy.ServiceException as ex:
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_servo3_max = ret.value.integer
+            self.apm_rc3_max = ret.value.integer
         else:
-            rospy.logerr("get_param(SERVO3_MAX) request failed. Check mavros logs")
+            rospy.logerr("get_param(RC3_MAX) request failed. Check mavros logs")
 
         ret = None
         try:
-            ret = self.get_param(param_id = 'SERVO3_MIN')
+            ret = self.get_param(param_id = 'RC3_MIN')
         except rospy.ServiceException as ex:
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_servo3_min = ret.value.integer
+            self.apm_rc3_min = ret.value.integer
         else:
-            rospy.logerr("get_param(SERVO3_MIN) request failed. Check mavros logs")
+            rospy.logerr("get_param(RC3_MIN) request failed. Check mavros logs")
 
         ret = None
         try:
-            ret = self.get_param(param_id = 'SERVO3_TRIM')
+            ret = self.get_param(param_id = 'RC3_TRIM')
         except rospy.ServiceException as ex:
             rospy.logerr(ex)
 
         if ret != None and ret.success:
-            self.apm_servo3_trim = ret.value.integer
+            self.apm_rc3_trim = ret.value.integer
         else:
-            rospy.logerr("get_param(SERVO3_TRIM) request failed. Check mavros logs")
+            rospy.logerr("get_param(RC3_TRIM) request failed. Check mavros logs")
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'BRAKING_PERCENT')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'BRAKING_PERCENT')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            self.apm_braking_percent = ret.value.integer
-        else:
-            rospy.logerr("get_param(SERVO3_TRIM) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     self.apm_braking_percent = ret.value.integer
+        # else:
+        #     rospy.logerr("get_param(BRAKING_PERCENT) request failed. Check mavros logs")
 
-        thr_p = 0.0
-        thr_i = 0.0
-        thr_d = 0.0
-        thr_imax = 0.0
+        thr_p = 2.4 # 0.7
+        thr_i = 0.2
+        thr_d = 0.2
+        thr_imax = 4000.0
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'SPEED2THR_P')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'ATC_SPEED_P')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            thr_p = ret.value.real
-        else:
-            rospy.logerr("get_param(SPEED2THR_P) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     thr_p = ret.value.real
+        # else:
+        #     rospy.logerr("get_param(ATC_SPEED_P) request failed. Check mavros logs")
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'SPEED2THR_I')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'ATC_SPEED_I')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            thr_i = ret.value.real
-        else:
-            rospy.logerr("get_param(SPEED2THR_I) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     thr_i = ret.value.real
+        # else:
+        #     rospy.logerr("get_param(ATC_SPEED_I) request failed. Check mavros logs")
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'SPEED2THR_D')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'ATC_SPEED_D')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            thr_d = ret.value.real
-        else:
-            rospy.logerr("get_param(SPEED2THR_D) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     thr_d = ret.value.real
+        # else:
+        #     rospy.logerr("get_param(ATC_SPEED_D) request failed. Check mavros logs")
 
-        ret = None
-        try:
-            ret = self.get_param(param_id = 'SPEED2THR_IMAX')
-        except rospy.ServiceException as ex:
-            rospy.logerr(ex)
+        # ret = None
+        # try:
+        #     ret = self.get_param(param_id = 'ATC_SPEED_IMAX')
+        # except rospy.ServiceException as ex:
+        #     rospy.logerr(ex)
 
-        if ret != None and ret.success:
-            thr_imax = ret.value.integer
-        else:
-            rospy.logerr("get_param(SPEED2THR_IMAX) request failed. Check mavros logs")
+        # if ret != None and ret.success:
+        #     thr_imax = ret.value.integer
+        # else:
+        #     rospy.logerr("get_param(ATC_SPEED_IMAX) request failed. Check mavros logs")
 
         self.throttle_pid = PID(thr_p, thr_i, thr_d)
         self.throttle_pid._imax = thr_imax

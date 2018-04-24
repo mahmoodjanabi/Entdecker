@@ -116,10 +116,11 @@ class Receiver():
                         value = int(m.group(1))
 
                         # rospy.loginfo("%s: Receiver got %d" % (self.node_name, value))
-                        self.touch_pub.publish(value)
 
                         if value > 0:
                             self.search_pub.publish(False)
+
+                        self.touch_pub.publish(value)
 
                     m = re.match('^E ([-0-9]+)( ([-0-9]+))?( ([-0-9]+))?$', l)
 

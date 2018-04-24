@@ -13,7 +13,7 @@ from mw_mavros.base_handler import BaseHandler
 class TouchHandler(BaseHandler):
     states = {
         'neutral_1' : {
-            'max_time' : 0.05, 
+            'max_time' : 0.1, # 0.05, 
             'next' : 'brake_1'
         },
         'brake_1' : {
@@ -25,7 +25,7 @@ class TouchHandler(BaseHandler):
         },
         'neutral_2' : {
             'check_finish' : True,
-            'max_time' : 0.05, 
+            'max_time' : 0.1, # 0.05, 
             'next' : 'back'
         },
         'back' : {
@@ -35,11 +35,11 @@ class TouchHandler(BaseHandler):
             'target_time' : 1.5,
             'reset_pid' : True,
             'throttle_max' : -0.1,
-            'throttle_min' : -600.0,
+            'throttle_min' : -1000.0,
             'next' : 'neutral_3'
         },
         'neutral_3' : {
-            'max_time' : 0.05, 
+            'max_time' : 0.1, # 0.05, 
             'next' : 'brake_2'
         },
         # brake for a bit
@@ -61,7 +61,7 @@ class TouchHandler(BaseHandler):
             'target_time' : 1.0,
             'reset_pid' : True,
             'steer_offset' : 300,
-            'throttle_max' : 600.0,
+            'throttle_max' : 1000.0,
             'throttle_min' : 0.1,
             'next' : 'forward'
         },
@@ -70,7 +70,7 @@ class TouchHandler(BaseHandler):
             'target_distance' : 1.5,
             'target_speed' : 1.0,
             'target_time' : 0.5,
-            'throttle_max' : 600.0,
+            'throttle_max' : 1000.0,
             'throttle_min' : 0.1,
             'next' : 'done'
         },
@@ -89,6 +89,7 @@ class TouchHandler(BaseHandler):
         self.current_wp = -1
         self.encoder_distance = 0
         self.touch_value = -1
+        self.last_touch = -1
         self.state = None
         self.state_start = 0
         self.state_target_speed_reached = None
@@ -128,13 +129,16 @@ class TouchHandler(BaseHandler):
             self.conditionVariable.notify()
 
     def touch_callback(self, tp):
-        with self.nodeLock:
-            touch = tp.data
+        touch = tp.data
 
         if self.touch_value == touch:
             return
 
-        self.touch_value = touch
+        with self.nodeLock:
+            if touch == 0:
+                self.last_touch = self.touch_value
+
+            self.touch_value = touch
         
         if touch == 0:
             return
@@ -208,7 +212,7 @@ class TouchHandler(BaseHandler):
         with self.nodeLock:
             avoid = self.avoid_direction
             speed = self.arduino_speed_value
-            touch = self.touch_value
+            last_touch = self.last_touch
             last_rc3 = self.last_rc3_raw
             enc = self.encoder_distance
             self.updates = 0
@@ -255,16 +259,22 @@ class TouchHandler(BaseHandler):
         orc.channels[0] = self.apm_rc1_trim                    #  straight
 
         if 'steer_offset' in self.states[self.state].keys():
+            o = self.states[self.state]['steer_offset']
+            reverse_mul = 1
+            if self.apm_rc1_reversed != 0:
+                reverse_mul = -1
+            o *= reverse_mul
+
             if avoid > 0:
                 if avoid == 1:
-                    orc.channels[0] -= self.states[self.state]['steer_offset']
+                    orc.channels[0] -= o
                 else:
-                    orc.channels[0] += self.states[self.state]['steer_offset']
+                    orc.channels[0] += o
             else:
-                if touch < 2:
-                    orc.channels[0] += self.states[self.state]['steer_offset']
+                if last_touch < 2:
+                    orc.channels[0] -= o
                 else:
-                    orc.channels[0] -= self.states[self.state]['steer_offset']
+                    orc.channels[0] += o
 
         orc.channels[2] = self.apm_rc3_trim                    # neutral
 
@@ -273,10 +283,10 @@ class TouchHandler(BaseHandler):
                 orc.channels[2] += self.states[self.state]['throttle_offset']
             else:
                 if self.last_throttle == 0:
-                    if last_rc3 - self.apm_servo3_trim < 0:
-                        self.last_throttle = float(last_rc3 - self.apm_servo3_trim) / float(self.apm_servo3_trim - self.apm_servo3_min) * 1000.0
+                    if last_rc3 - self.apm_rc3_trim < 0:
+                        self.last_throttle = float(last_rc3 - self.apm_rc3_trim) / float(self.apm_rc3_trim - self.apm_rc3_min) * 1000.0
                     else:
-                        self.last_throttle = float(last_rc3 - self.apm_servo3_trim) / float(self.apm_servo3_max - self.apm_servo3_trim) * 1000.0
+                        self.last_throttle = float(last_rc3 - self.apm_rc3_trim) / float(self.apm_rc3_max - self.apm_rc3_trim) * 1000.0
 
                 last_t = self.last_throttle
                 target_speed = self.states[self.state]['target_speed']
@@ -286,9 +296,9 @@ class TouchHandler(BaseHandler):
                 last_t = self.constrain(last_t, self.states[self.state]['throttle_min'], self.states[self.state]['throttle_max']) # 0.1 of percents
 
                 if last_t < 0.0:
-                    orc.channels[2] += int(last_t / 1000.0 * float(self.apm_servo3_trim - self.apm_servo3_min))
+                    orc.channels[2] += int(last_t / 1000.0 * float(self.apm_rc3_trim - self.apm_rc3_min))
                 else:
-                    orc.channels[2] += int(last_t / 1000.0 * float(self.apm_servo3_max - self.apm_servo3_trim))
+                    orc.channels[2] += int(last_t / 1000.0 * float(self.apm_rc3_max - self.apm_rc3_trim))
 
                 self.last_throttle = last_t
 
