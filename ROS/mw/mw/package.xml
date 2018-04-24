@@ -9,6 +9,7 @@
   <buildtool_depend>catkin</buildtool_depend>
 
   <run_depend>mw_arduino</run_depend>
+  <run_depend>mw_lidar</run_depend>
   <run_depend>mw_mavros</run_depend>
   <run_depend>mw_video</run_depend>
 
