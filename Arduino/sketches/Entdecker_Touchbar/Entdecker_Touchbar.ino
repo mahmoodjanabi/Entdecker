@@ -8,6 +8,9 @@
 #define BUTTON_PIN_R 5
 #define LED_PIN 13
 
+#define TOUCHHANDLER_LED 2
+#define SEARCHHANDLER_LED 4
+
 //below can be changed, but should be PORTC pins
 #define ENC_PIN_A PC0  //pin A0
 #define ENC_PIN_B PC1  //pin A1
@@ -81,6 +84,11 @@ void setup() {
   pinMode(LED_PIN, OUTPUT);
   pinMode(BUTTON_PIN_L, INPUT_PULLUP);
   pinMode(BUTTON_PIN_R, INPUT_PULLUP);
+  
+  pinMode(TOUCHHANDLER_LED, OUTPUT);
+  pinMode(SEARCHHANDLER_LED, OUTPUT);
+  digitalWrite(TOUCHHANDLER_LED, LOW);
+  digitalWrite(SEARCHHANDLER_LED, LOW);
 
   for (i = 0; i < 3; i++) {
     pinMode(rgbPins[i], OUTPUT);
@@ -131,17 +139,39 @@ void loop() {
     if (chr == 10 || chr == 13) {
         input_buffer[input_p++] = 0;
 
-      if (input_buffer[0] == 'o') {
-        buffer_line(0);
-      }
-      else if (input_buffer[0] == 't') {
-        buffer_line(1);
-      }
-      else if (input_buffer[0] == 'l') {
-        buffer_led();
-      }
-      else if (input_buffer[0] == 'E') {
-        encSum = 0L;
+      switch (input_buffer[0]) {
+        case 'o': {
+          buffer_line(0);
+        }
+        break;
+        case 't': {
+          buffer_line(1);
+        }
+        break;
+        case 'l': {
+          buffer_led();
+        }
+        break;
+        case 'E': {
+          encSum = 0L;
+        }
+        break;
+        case 'S': {
+          digitalWrite(SEARCHHANDLER_LED, HIGH);
+        }
+        break;
+        case 's': {
+          digitalWrite(SEARCHHANDLER_LED, LOW);
+        }
+        break;
+        case 'H': {
+          digitalWrite(TOUCHHANDLER_LED, HIGH);
+        }
+        break;
+        case 'h': {
+          digitalWrite(TOUCHHANDLER_LED, LOW);
+        }
+        break;
       }
 
       for (int i = 0; i < 32; i++) {
