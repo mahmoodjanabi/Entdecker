@@ -30,6 +30,9 @@ class Receiver():
         self.wp_current_sub = rospy.Subscriber("/mavros/mission/current", Int16, self.wp_current_callback, queue_size = 1)
         self.wp_reached_sub = rospy.Subscriber("/mavros/mission/reached", Int16, self.wp_reached_callback, queue_size = 1)
         self.cone_location_sub = rospy.Subscriber("/mw/cone_location", ConeLocation, self.cone_callback, queue_size = 1)
+        self.search_sub = rospy.Subscriber("/mw/search", Bool, self.search_callback, queue_size = 1)
+        self.touchhandler_sub = rospy.Subscriber("/mw/touchhandler", Bool, self.touchhandler_callback, queue_size = 1)
+
         self.last_display_update = 0.0
         self.fix = 0
         self.latitude = 0.0
@@ -42,6 +45,8 @@ class Receiver():
         self.ros_num = 0
         self.ping_result = 1
         self.wap_result = 1
+        self.touchhandler = "h\n"
+        self.search = "s\n"
 
         rospy.loginfo("%s: Ready." % self.node_name)
 
@@ -105,6 +110,9 @@ class Receiver():
                     time.sleep(0.040)
                     self.serial_port.write("t3           \n")
 
+                self.serial_port.write(self.touchhandler)
+                self.serial_port.write(self.search)
+
             try:
                 l = self.serial_port.readline()
                 if l:
@@ -115,7 +123,7 @@ class Receiver():
                     if m:
                         value = int(m.group(1))
 
-                        # rospy.loginfo("%s: Receiver got %d" % (self.node_name, value))
+                        rospy.loginfo("%s: Receiver got %d" % (self.node_name, value))
 
                         if value > 0:
                             self.search_pub.publish(False)
@@ -183,6 +191,18 @@ class Receiver():
             nodeLock.release()
 
         return
+
+    def search_callback(self, d):
+        if d.data:
+            self.search = "S\n"
+        else:
+            self.search = "s\n"
+
+    def touchhandler_callback(self, d):
+        if d.data:
+            self.touchhandler = "H\n"
+        else:
+            self.touchhandler = "h\n"
 
 class CheckThread(threading.Thread):
     def __init__(self, group = None, target = None, name = None,

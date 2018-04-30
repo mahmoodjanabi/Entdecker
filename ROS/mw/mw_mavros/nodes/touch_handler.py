@@ -143,6 +143,11 @@ class TouchHandler(BaseHandler):
         if touch == 0:
             return
 
+        try:
+            self.touchhandler_pub.publish(True)
+        except:
+            rospy.logerr("touchhandler_pub() exception")
+
         if not self.is_manual:
             rospy.loginfo("%s: touch_callback %d - Set MANUAL" % (self.node_name, self.touch_value))
 
@@ -227,6 +232,12 @@ class TouchHandler(BaseHandler):
         if diff >= self.states[self.state]['max_time']:
             if self.advance_state():
                 return
+
+        try:
+            self.touchhandler_pub.publish(True)
+        except:
+            rospy.logerr("touchhandler_pub() exception")
+
 
         if 'target_distance' in self.states[self.state].keys():
             if self.state_target_distance == None:

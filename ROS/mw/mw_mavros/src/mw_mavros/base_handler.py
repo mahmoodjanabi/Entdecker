@@ -162,6 +162,7 @@ class BaseHandler(object):
         self.rc_override_pub = rospy.Publisher("/mavros/rc/override", OverrideRCIn, queue_size = 1)
         self.search_pub = rospy.Publisher("/mw/search", Bool, queue_size = 1)
         self.sound_pub = rospy.Publisher("/mw/sound", Int8, queue_size = 1)
+        self.touchhandler_pub = rospy.Publisher("/mw/touchhandler", Bool, queue_size = 1)
 
         self.avoid_sub = rospy.Subscriber("/mw/avoid_direction", Int8, self.avoid_callback, queue_size = 1)
         self.arduino_speed_sub = rospy.Subscriber("/mw/speed", Float32, self.arduino_speed_callback, queue_size = 1)
@@ -379,6 +380,11 @@ class BaseHandler(object):
             self.search_pub.publish(False)
         except:
             rospy.logerr("search_pub() exception")
+
+        try:
+            self.touchhandler_pub.publish(False)
+        except:
+            rospy.logerr("touchhandler_pub() exception")
 
         try:
             self.sound_pub.publish(2)
