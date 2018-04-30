@@ -1,0 +1,3 @@
+#!/bin/bash
+
+exec ps -edaf | fgrep ".ros/log" | fgrep "home" | wc -l

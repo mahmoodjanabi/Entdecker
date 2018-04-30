@@ -1,0 +1,28 @@
+#!/bin/bash
+
+ret=0
+x=$(/sbin/ifconfig wlan1 | /usr/bin/awk 'BEGIN { c = 0; } $1 == "UP" { c++; } $2 == "addr:192.168.8.1" { c++; } END { print c; }')
+if [ $x -ne 2 ]
+then
+    ((ret++))
+fi
+
+x=$(/sbin/iwconfig wlan1 | /usr/bin/awk 'BEGIN { c = 0; } $4 == "ESSID:\"Entdecker\"" { c++; } $1 == "Mode:Master" { c++; } END { print c; }')
+if [ $x -ne 2 ]
+then
+    ((ret++))
+fi
+
+/bin/ps -edaf | /bin/fgrep 'hostapd ' | /bin/fgrep -qv 'fgrep '
+if [ $? -ne 0 ]
+then
+    ((ret++))
+fi
+
+/bin/ps -edaf | /bin/fgrep 'dhcpd ' | /bin/fgrep -qv 'fgrep '
+if [ $? -ne 0 ]
+then
+    ((ret++))
+fi
+
+exit $ret
